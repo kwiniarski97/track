@@ -1,0 +1,86 @@
+@import 'tailwindcss';
+
+@theme {
+	/* Dark cinematic palette -- background matches app.html's theme-color / the PWA
+	   manifest's background_color, so there's no flash before Svelte/CSS take over. */
+	--color-bg: #0a0a0e;
+	--color-bg-elevated: #101015;
+	--color-surface: #15151d;
+	--color-surface-2: #1d1d27;
+	--color-border: rgb(255 255 255 / 8%);
+	--color-border-strong: rgb(255 255 255 / 14%);
+	--color-text: #f2f1f6;
+	--color-text-muted: #a5a3b3;
+	--color-text-faint: #6f6d7d;
+	--color-accent: #f2b544;
+	--color-accent-strong: #ffcb6b;
+	--color-accent-fg: #1a1206;
+	--color-danger: #f2634a;
+
+	--font-sans:
+		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
+		'Apple Color Emoji', 'Segoe UI Emoji';
+
+	--radius-card: 18px;
+	--radius-pill: 999px;
+	--radius-panel: 22px;
+
+	--shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 30px -12px rgb(0 0 0 / 60%);
+	--shadow-elevated: 0 4px 12px rgb(0 0 0 / 35%), 0 24px 48px -20px rgb(0 0 0 / 70%);
+	--shadow-glow: 0 0 0 1px rgb(242 181 68 / 25%), 0 8px 24px -8px rgb(242 181 68 / 35%);
+
+	--ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@layer base {
+	:root {
+		color-scheme: dark;
+	}
+
+	html {
+		background: var(--color-bg);
+	}
+
+	body {
+		min-height: 100dvh;
+		background: var(--color-bg);
+		color: var(--color-text);
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+		text-rendering: optimizeLegibility;
+	}
+
+	::selection {
+		background: rgb(242 181 68 / 30%);
+		color: var(--color-text);
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+		border-radius: 4px;
+	}
+
+	a {
+		color: inherit;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.001ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.001ms !important;
+			scroll-behavior: auto !important;
+		}
+	}
+}
+
+@layer utilities {
+	.glass {
+		background: rgb(21 21 29 / 70%);
+		backdrop-filter: blur(16px) saturate(140%);
+		-webkit-backdrop-filter: blur(16px) saturate(140%);
+	}
+}
