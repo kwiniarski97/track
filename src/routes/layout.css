@@ -12,9 +12,9 @@
 	--color-text: #f2f1f6;
 	--color-text-muted: #a5a3b3;
 	--color-text-faint: #6f6d7d;
-	--color-accent: #f2b544;
-	--color-accent-strong: #ffcb6b;
-	--color-accent-fg: #1a1206;
+	--color-accent: #ff858d;
+	--color-accent-strong: #ffaeb4;
+	--color-accent-fg: #2a0d10;
 	--color-danger: #f2634a;
 
 	--font-sans:
@@ -27,7 +27,8 @@
 
 	--shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 30px -12px rgb(0 0 0 / 60%);
 	--shadow-elevated: 0 4px 12px rgb(0 0 0 / 35%), 0 24px 48px -20px rgb(0 0 0 / 70%);
-	--shadow-glow: 0 0 0 1px rgb(242 181 68 / 25%), 0 8px 24px -8px rgb(242 181 68 / 35%);
+	--shadow-glow: 0 0 0 1px rgb(255 133 141 / 25%), 0 8px 24px -8px rgb(255 133 141 / 35%);
+	--shadow-glow-lg: 0 0 0 1px rgb(255 133 141 / 20%), 0 16px 40px -12px rgb(255 133 141 / 45%);
 
 	--ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
@@ -42,6 +43,7 @@
 	}
 
 	body {
+		position: relative;
 		min-height: 100dvh;
 		background: var(--color-bg);
 		color: var(--color-text);
@@ -50,8 +52,22 @@
 		text-rendering: optimizeLegibility;
 	}
 
+	/* Fixed, low-opacity color blobs behind every page -- gives the flat dark theme
+	   some depth/shine without needing a cover image on screens that don't have one. */
+	body::before {
+		content: '';
+		position: fixed;
+		inset: 0;
+		z-index: -1;
+		background:
+			radial-gradient(650px circle at 12% -10%, rgb(255 133 141 / 14%), transparent 60%),
+			radial-gradient(550px circle at 112% 15%, rgb(120 140 255 / 10%), transparent 60%),
+			radial-gradient(500px circle at 50% 120%, rgb(242 99 74 / 6%), transparent 60%);
+		pointer-events: none;
+	}
+
 	::selection {
-		background: rgb(242 181 68 / 30%);
+		background: rgb(255 133 141 / 30%);
 		color: var(--color-text);
 	}
 
@@ -82,5 +98,47 @@
 		background: rgb(21 21 29 / 70%);
 		backdrop-filter: blur(16px) saturate(140%);
 		-webkit-backdrop-filter: blur(16px) saturate(140%);
+	}
+
+	.text-gradient-accent {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent) 70%);
+		background-clip: text;
+		-webkit-background-clip: text;
+		color: transparent;
+	}
+
+	.bg-gradient-accent {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent) 85%);
+	}
+
+	/* Diagonal light sweep, faded in on hover -- used for the "shiny" poster/button highlight. */
+	.sheen {
+		position: relative;
+		overflow: hidden;
+	}
+
+	.sheen::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(
+			115deg,
+			transparent 30%,
+			rgb(255 255 255 / 16%) 48%,
+			rgb(255 255 255 / 16%) 52%,
+			transparent 70%
+		);
+		background-size: 200% 200%;
+		background-position: 130% 0%;
+		opacity: 0;
+		transition:
+			opacity 0.3s var(--ease-out-quart),
+			background-position 0.7s var(--ease-out-quart);
+		pointer-events: none;
+	}
+
+	.sheen:hover::after {
+		opacity: 1;
+		background-position: -30% 0%;
 	}
 }

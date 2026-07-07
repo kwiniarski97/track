@@ -28,7 +28,7 @@
 >
 	<span
 		class="flex h-6 w-6 flex-none items-center justify-center rounded-full border transition-colors {watched
-			? 'border-accent bg-accent text-accent-fg'
+			? 'bg-gradient-accent border-accent text-accent-fg shadow-glow'
 			: 'border-border-strong text-transparent'}"
 	>
 		{#if watched}

@@ -37,6 +37,10 @@
 		{/if}
 		<div class="absolute inset-0 bg-gradient-to-t from-bg via-bg/70 to-transparent"></div>
 		<div class="absolute inset-0 bg-gradient-to-r from-bg/80 via-transparent to-transparent"></div>
+		<div
+			class="pointer-events-none absolute inset-0"
+			style="background: radial-gradient(50% 60% at 85% 0%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 70%);"
+		></div>
 	</div>
 
 	<a
@@ -52,7 +56,7 @@
 			<img
 				src={poster}
 				alt=""
-				class="hidden w-28 flex-none rounded-card shadow-elevated sm:block sm:w-40"
+				class="ring-border-strong/50 hidden w-28 flex-none rounded-card shadow-elevated ring-1 sm:block sm:w-40"
 			/>
 		{/if}
 		<div class="flex flex-1 flex-col justify-end gap-2 pb-1">

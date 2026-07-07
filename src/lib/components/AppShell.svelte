@@ -62,14 +62,14 @@
 <div class="flex min-h-dvh flex-col">
 	<header class="glass sticky top-0 z-20 hidden border-b border-border md:block">
 		<div class="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
-			<a href={resolve('/')} class="text-lg font-semibold tracking-tight text-text">
+			<a href={resolve('/')} class="text-gradient-accent text-lg font-bold tracking-tight">
 				{m.app_name()}
 			</a>
 
 			<nav bind:this={navEl} class="relative flex items-center gap-1">
 				<span
 					bind:this={indicatorEl}
-					class="pointer-events-none absolute top-0 left-0 rounded-pill bg-surface-2"
+					class="pointer-events-none absolute top-0 left-0 rounded-pill bg-gradient-to-b from-white/10 to-white/5 ring-1 ring-inset ring-white/10"
 					style="height: 0; width: 0;"
 				></span>
 				{#each navItems as item (item.href)}
@@ -89,9 +89,13 @@
 
 			<div class="flex items-center gap-3">
 				{#if user}
-					<span class="max-w-[14ch] truncate text-sm text-text-muted" title={user.name}>
+					<a
+						href={resolve('/profile')}
+						class="max-w-[14ch] truncate text-sm text-text-muted transition-colors hover:text-text"
+						title={user.name}
+					>
 						{user.name}
-					</span>
+					</a>
 				{/if}
 				<form method="POST" action="/logout">
 					<button

@@ -50,7 +50,7 @@
 			</label>
 			<button
 				type="submit"
-				class="rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-accent-fg transition-transform hover:scale-[1.03]"
+				class="sheen bg-gradient-accent rounded-pill px-5 py-2.5 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.03]"
 			>
 				{m.import_upload_button()}
 			</button>
@@ -105,7 +105,7 @@
 			</ul>
 			<button
 				type="submit"
-				class="self-start rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-accent-fg transition-transform hover:scale-[1.03]"
+				class="sheen bg-gradient-accent self-start rounded-pill px-5 py-2.5 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.03]"
 			>
 				{m.import_confirm_button()}
 			</button>

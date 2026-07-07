@@ -11,12 +11,14 @@
 	></div>
 
 	<div class="relative z-10 flex flex-col items-center gap-6 text-center">
-		<h1 class="text-4xl font-bold tracking-tight text-text sm:text-5xl">{m.app_name()}</h1>
+		<h1 class="text-gradient-accent text-4xl font-bold tracking-tight sm:text-5xl">
+			{m.app_name()}
+		</h1>
 		<p class="max-w-sm text-balance text-base text-text-muted">{m.login_tagline()}</p>
 		<form method="POST">
 			<button
 				type="submit"
-				class="rounded-pill bg-accent px-7 py-3.5 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.04]"
+				class="sheen bg-gradient-accent rounded-pill px-7 py-3.5 text-sm font-semibold text-accent-fg shadow-glow-lg transition-transform hover:scale-[1.04]"
 			>
 				{m.login_with_pocket_id()}
 			</button>

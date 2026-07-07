@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import type { ResolvedPathname } from '$app/types';
 	import { m } from '$lib/paraglide/messages';
+	import { tmdbPosterUrl } from '$lib/tmdb-client';
 	import PosterGrid from '$lib/components/PosterGrid.svelte';
 	import PosterCard from '$lib/components/PosterCard.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
@@ -17,16 +18,51 @@
 	}
 
 	const isEmpty = $derived(data.watching.length === 0 && data.planToWatch.length === 0);
+	// A blurred backdrop of the user's own posters, most-recently-tracked first --
+	// gives the dashboard a personal, cinematic feel instead of a flat header.
+	const heroPosters = $derived(
+		[...data.watching, ...data.planToWatch]
+			.map((item) => tmdbPosterUrl(item.posterPath, 'w342'))
+			.filter((url) => url !== null)
+			.slice(0, 10)
+	);
 </script>
 
 <svelte:head><title>{m.app_name()}</title></svelte:head>
 
-<div class="mb-8">
-	<h1 class="text-2xl font-bold tracking-tight text-text sm:text-3xl">{m.app_name()}</h1>
-	<p class="mt-1 text-sm text-text-muted">
-		{m.home_signed_in_as({ name: data.user?.name ?? '', email: data.user?.email ?? '' })}
-	</p>
-</div>
+{#if heroPosters.length > 0}
+	<div class="relative -mx-4 -mt-6 mb-8 overflow-hidden md:-mx-6 md:-mt-10">
+		<div class="relative flex h-36 sm:h-48">
+			{#each heroPosters as poster (poster)}
+				<img
+					src={poster}
+					alt=""
+					class="h-full flex-1 scale-110 object-cover opacity-50 blur-[2px] saturate-125"
+				/>
+			{/each}
+		</div>
+		<div class="absolute inset-0 bg-gradient-to-t from-bg via-bg/85 to-bg/10"></div>
+		<div
+			class="pointer-events-none absolute inset-0"
+			style="background: radial-gradient(60% 90% at 10% 100%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 70%);"
+		></div>
+		<div class="relative z-10 -mt-8 px-4 pb-5 md:px-6">
+			<h1 class="text-gradient-accent text-2xl font-bold tracking-tight sm:text-3xl">
+				{m.app_name()}
+			</h1>
+			<p class="mt-1 text-sm text-text-muted">
+				{m.home_signed_in_as({ name: data.user?.name ?? '', email: data.user?.email ?? '' })}
+			</p>
+		</div>
+	</div>
+{:else}
+	<div class="mb-8">
+		<h1 class="text-2xl font-bold tracking-tight text-text sm:text-3xl">{m.app_name()}</h1>
+		<p class="mt-1 text-sm text-text-muted">
+			{m.home_signed_in_as({ name: data.user?.name ?? '', email: data.user?.email ?? '' })}
+		</p>
+	</div>
+{/if}
 
 {#if isEmpty}
 	<EmptyState

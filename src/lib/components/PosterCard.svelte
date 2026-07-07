@@ -25,7 +25,7 @@
 
 <a {href} use:reveal={{ index }} class="group block">
 	<div
-		class="relative aspect-[2/3] overflow-hidden rounded-card bg-surface shadow-card transition-transform duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-elevated"
+		class="sheen relative aspect-[2/3] overflow-hidden rounded-card bg-surface shadow-card ring-1 ring-white/5 transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-glow-lg group-hover:ring-accent/30"
 	>
 		{#if poster}
 			<img
@@ -41,9 +41,12 @@
 				{title}
 			</div>
 		{/if}
+		<div
+			class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent"
+		></div>
 		{#if watched}
 			<span
-				class="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-fg shadow-elevated"
+				class="bg-gradient-accent absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-accent-fg shadow-elevated"
 			>
 				<IconCheck size={14} />
 			</span>

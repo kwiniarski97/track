@@ -28,7 +28,7 @@
 	</div>
 	<button
 		type="submit"
-		class="rounded-pill bg-accent px-5 py-3 text-sm font-semibold text-accent-fg transition-transform hover:scale-[1.03]"
+		class="sheen bg-gradient-accent rounded-pill px-5 py-3 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.03]"
 	>
 		{m.search_button()}
 	</button>

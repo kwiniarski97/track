@@ -86,7 +86,8 @@ export const episodes = sqliteTable(
 		seasonNumber: integer('season_number').notNull(),
 		episodeNumber: integer('episode_number').notNull(),
 		title: text('title').notNull(),
-		airDate: text('air_date')
+		airDate: text('air_date'),
+		runtime: integer('runtime')
 	},
 	(t) => [
 		uniqueIndex('episodes_show_season_episode_unique').on(
@@ -103,6 +104,7 @@ export const movies = sqliteTable('movies', {
 	posterPath: text('poster_path'),
 	overview: text('overview'),
 	releaseDate: text('release_date'),
+	runtime: integer('runtime'),
 	updatedAt: integer('updated_at', { mode: 'timestamp' })
 		.notNull()
 		.$defaultFn(() => new Date())

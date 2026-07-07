@@ -110,6 +110,7 @@ export type TmdbSeasonDetails = {
 		episode_number: number;
 		name: string;
 		air_date: string | null;
+		runtime: number | null;
 	}>;
 };
 
@@ -124,6 +125,7 @@ export type TmdbMovieDetails = {
 	poster_path: string | null;
 	backdrop_path: string | null;
 	release_date: string | null;
+	runtime: number | null;
 };
 
 export function getMovieDetails(tmdbId: number): Promise<TmdbMovieDetails> {

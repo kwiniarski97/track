@@ -75,5 +75,16 @@
 	"jellyfin_synced": "Synced.",
 	"jellyfin_select_error": "Please select a Jellyfin user.",
 	"jellyfin_sync_failed": "Sync failed. Check the server logs.",
-	"jellyfin_list_error": "Couldn't reach Jellyfin. Check JELLYFIN_URL/JELLYFIN_API_KEY."
+	"jellyfin_list_error": "Couldn't reach Jellyfin. Check JELLYFIN_URL/JELLYFIN_API_KEY.",
+
+	"profile_title": "Profile",
+	"profile_link": "Profile & stats",
+	"profile_stat_time_watched": "Time watched",
+	"profile_stat_episodes_watched": "Episodes watched",
+	"profile_stat_movies_watched": "Movies watched",
+	"profile_stat_shows_completed": "Shows completed",
+	"profile_completed_shows_heading": "Completed shows",
+	"profile_completed_movies_heading": "Watched movies",
+	"profile_empty_heading": "No stats yet",
+	"profile_empty_body": "Track and mark episodes or movies as watched to see your stats here."
 }

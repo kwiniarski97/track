@@ -63,7 +63,7 @@
 >
 	<span
 		bind:this={indicatorEl}
-		class="pointer-events-none absolute top-1 left-1 rounded-pill bg-accent"
+		class="bg-gradient-accent pointer-events-none absolute top-1 left-1 rounded-pill shadow-glow"
 		style="height: 0; width: 0;"
 	></span>
 	{#each seasons as season (season.season_number)}

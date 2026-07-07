@@ -32,7 +32,7 @@
 <div class="flex flex-wrap items-center gap-2">
 	{#if trackingStatus}
 		<span
-			class="flex items-center gap-1.5 rounded-pill bg-surface-2 px-4 py-2 text-sm font-medium text-text"
+			class="flex items-center gap-1.5 rounded-pill bg-surface-2 px-4 py-2 text-sm font-medium text-text ring-1 ring-inset ring-accent/25"
 		>
 			<IconCheck size={15} class="text-accent" />
 			{trackingLabel}
@@ -53,7 +53,7 @@
 				bind:this={buttonEl}
 				type="submit"
 				disabled={pending}
-				class="flex items-center gap-1.5 rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.03] disabled:opacity-70"
+				class="sheen bg-gradient-accent flex items-center gap-1.5 rounded-pill px-5 py-2.5 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.03] disabled:opacity-70"
 			>
 				<IconPlus size={15} />
 				{trackLabel}

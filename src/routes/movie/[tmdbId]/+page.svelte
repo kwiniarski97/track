@@ -57,7 +57,7 @@
 	>
 		<span
 			class="flex h-5 w-5 items-center justify-center rounded-full border transition-colors {isWatched
-				? 'border-accent bg-accent text-accent-fg'
+				? 'bg-gradient-accent border-accent text-accent-fg'
 				: 'border-border-strong text-transparent'}"
 		>
 			<IconCheck size={12} />

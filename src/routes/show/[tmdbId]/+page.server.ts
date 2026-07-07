@@ -21,11 +21,12 @@ async function ensureSeasonEpisodesCached(tmdbId: number, seasonNumber: number) 
 				seasonNumber,
 				episodeNumber: ep.episode_number,
 				title: ep.name,
-				airDate: ep.air_date
+				airDate: ep.air_date,
+				runtime: ep.runtime
 			})
 			.onConflictDoUpdate({
 				target: [episodes.showTmdbId, episodes.seasonNumber, episodes.episodeNumber],
-				set: { title: ep.name, airDate: ep.air_date }
+				set: { title: ep.name, airDate: ep.air_date, runtime: ep.runtime }
 			});
 	}
 }
@@ -38,11 +39,13 @@ async function ensureAllSeasonsEpisodesCached(
 ) {
 	for (const season of seasonsList) {
 		const [existing] = await db
-			.select({ episodeNumber: episodes.episodeNumber })
+			.select({ runtime: episodes.runtime })
 			.from(episodes)
 			.where(and(eq(episodes.showTmdbId, tmdbId), eq(episodes.seasonNumber, season.season_number)))
 			.limit(1);
-		if (!existing) {
+		// Also recache if runtime is missing, so seasons cached before that column existed
+		// get backfilled the next time someone opens the show.
+		if (!existing || existing.runtime === null) {
 			await ensureSeasonEpisodesCached(tmdbId, season.season_number);
 		}
 	}

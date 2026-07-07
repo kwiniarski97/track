@@ -61,7 +61,8 @@ async function upsertMovie(details: TmdbMovieDetails): Promise<void> {
 		title: details.title,
 		posterPath: details.poster_path,
 		overview: details.overview,
-		releaseDate: details.release_date
+		releaseDate: details.release_date,
+		runtime: details.runtime
 	};
 	await db
 		.insert(movies)

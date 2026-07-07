@@ -29,7 +29,7 @@
 			</select>
 			<button
 				type="submit"
-				class="rounded-pill bg-accent px-5 py-2 text-sm font-semibold text-accent-fg transition-transform hover:scale-[1.03]"
+				class="sheen bg-gradient-accent rounded-pill px-5 py-2 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.03]"
 			>
 				{m.settings_locale_save()}
 			</button>
@@ -38,6 +38,13 @@
 
 	<FormCard>
 		<nav class="flex flex-col divide-y divide-border">
+			<a
+				href={resolve('/profile')}
+				class="flex items-center justify-between py-3 text-sm font-medium text-text transition-colors hover:text-accent"
+			>
+				{m.profile_link()}
+				<IconChevronLeft class="rotate-180 text-text-faint" size={16} />
+			</a>
 			<a
 				href={resolve('/settings/import')}
 				class="flex items-center justify-between py-3 text-sm font-medium text-text transition-colors hover:text-accent"
