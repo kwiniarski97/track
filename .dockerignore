@@ -3,4 +3,14 @@ node_modules
 build
 data
 .env
+.env.*
+!.env.example
 .git
+.github
+.idea
+.vscode
+*.db
+tvtime-data
+tests
+.claude
+README.md
