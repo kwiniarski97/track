@@ -76,10 +76,18 @@ export async function refreshMovie(tmdbId: number): Promise<TmdbMovieDetails> {
 	return details;
 }
 
+// TMDB's `status` field for a show is one of these -- only the first two mean no more
+// episodes are coming. Anything else (still airing, renewed, upcoming) should keep a
+// fully-watched show as 'watching' rather than flipping it to 'completed'.
+const ENDED_SHOW_STATUSES = new Set(['Ended', 'Canceled']);
+
 /** Flips a tracked show between 'watching' and 'completed' to match whether every
- * cached episode (including specials, same set the show page lets you check off) has
- * been watched. Relies on the `seasons` cache, which is only populated once someone
- * has opened the show page -- if it's empty this is a no-op rather than a false
+ * cached non-special episode has been watched -- specials (season 0) don't count
+ * toward completion, so a show with every regular episode watched but no specials
+ * logged still completes. Also requires the show itself to have ended: a renewed or
+ * still-airing show that's fully caught up stays 'watching' since more episodes are
+ * coming. Relies on the `seasons` cache, which is only populated once someone has
+ * opened the show page -- if it's empty this is a no-op rather than a false
  * completion. Leaves plan_to_watch/dropped alone since those are deliberate choices. */
 export async function syncShowCompletion(userId: string, tmdbId: number): Promise<void> {
 	const [tracking] = await db
@@ -94,10 +102,15 @@ export async function syncShowCompletion(userId: string, tmdbId: number): Promis
 		);
 	if (!tracking || (tracking.status !== 'watching' && tracking.status !== 'completed')) return;
 
+	const [showRow] = await db.select({ status: shows.status }).from(shows).where(eq(shows.tmdbId, tmdbId));
+	// Unknown status (show not cached) falls back to the old behavior rather than
+	// blocking completion forever.
+	const showHasEnded = !showRow?.status || ENDED_SHOW_STATUSES.has(showRow.status);
+
 	const [{ total }] = await db
 		.select({ total: sql<number>`coalesce(sum(${seasons.episodeCount}), 0)` })
 		.from(seasons)
-		.where(eq(seasons.showTmdbId, tmdbId));
+		.where(and(eq(seasons.showTmdbId, tmdbId), sql`${seasons.seasonNumber} != 0`));
 
 	const [{ watched }] = await db
 		.select({ watched: sql<number>`count(*)` })
@@ -106,11 +119,12 @@ export async function syncShowCompletion(userId: string, tmdbId: number): Promis
 			and(
 				eq(userWatches.userId, userId),
 				eq(userWatches.mediaType, 'tv'),
-				eq(userWatches.tmdbId, tmdbId)
+				eq(userWatches.tmdbId, tmdbId),
+				sql`${userWatches.seasonNumber} != 0`
 			)
 		);
 
-	const newStatus = total > 0 && watched >= total ? 'completed' : 'watching';
+	const newStatus = total > 0 && watched >= total && showHasEnded ? 'completed' : 'watching';
 	if (newStatus !== tracking.status) {
 		await db
 			.update(userTracking)

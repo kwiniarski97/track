@@ -144,5 +144,21 @@ export const actions: Actions = {
 					eq(userTracking.tmdbId, tmdbId)
 				)
 			);
+	},
+	// Soft stop: keeps the tracking row (and watch history) around as 'dropped' instead
+	// of deleting it, so the show still shows up in the profile's "My shows" list --
+	// it just drops out of the home page sections, which only look for watching/plan_to_watch.
+	drop: async ({ locals, params }) => {
+		const tmdbId = Number(params.tmdbId);
+		await db
+			.update(userTracking)
+			.set({ status: 'dropped' })
+			.where(
+				and(
+					eq(userTracking.userId, locals.user!.id),
+					eq(userTracking.mediaType, 'tv'),
+					eq(userTracking.tmdbId, tmdbId)
+				)
+			);
 	}
 };

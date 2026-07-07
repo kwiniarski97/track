@@ -12,6 +12,7 @@
 		meta = null,
 		backHref,
 		backLabel,
+		actions,
 		children
 	}: {
 		backdropPath: string | null;
@@ -21,6 +22,7 @@
 		meta?: string | null;
 		backHref: ResolvedPathname;
 		backLabel: string;
+		actions?: Snippet;
 		children?: Snippet;
 	} = $props();
 
@@ -67,6 +69,12 @@
 		</div>
 	</div>
 </div>
+
+{#if actions}
+	<div class="mt-5">
+		{@render actions()}
+	</div>
+{/if}
 
 <p class="mt-5 max-w-3xl text-sm leading-relaxed text-text-muted">{overview}</p>
 

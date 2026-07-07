@@ -173,3 +173,26 @@ export const jellyfinLibraryItems = sqliteTable(
 	},
 	(t) => [primaryKey({ columns: [t.mediaType, t.tmdbId] })]
 );
+
+// Per-user cache of upcoming episode/release dates, rebuilt from the shows/movies tables
+// by the twice-daily refreshCalendarCache job -- the calendar page only ever reads this,
+// it never recomputes or hits TMDB on a page view. seasonNumber/episodeNumber/episodeName
+// are only set for mediaType 'tv'.
+export const calendarEntries = sqliteTable(
+	'calendar_entries',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		mediaType: text('media_type', { enum: mediaTypes }).notNull(),
+		tmdbId: integer('tmdb_id').notNull(),
+		title: text('title').notNull(),
+		posterPath: text('poster_path'),
+		date: text('date').notNull(),
+		seasonNumber: integer('season_number'),
+		episodeNumber: integer('episode_number'),
+		episodeName: text('episode_name')
+	},
+	(t) => [uniqueIndex('calendar_entries_unique').on(t.userId, t.mediaType, t.tmdbId)]
+);

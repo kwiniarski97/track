@@ -10,6 +10,7 @@
 		posterPath,
 		subtitle = null,
 		watched = false,
+		badge = null,
 		index = 0
 	}: {
 		href: ResolvedPathname;
@@ -17,6 +18,7 @@
 		posterPath: string | null;
 		subtitle?: string | null;
 		watched?: boolean;
+		badge?: string | null;
 		index?: number;
 	} = $props();
 
@@ -49,6 +51,13 @@
 				class="bg-gradient-accent absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-accent-fg shadow-elevated"
 			>
 				<IconCheck size={14} />
+			</span>
+		{/if}
+		{#if badge}
+			<span
+				class="bg-gradient-accent absolute top-2 left-2 rounded-pill px-2 py-0.5 text-[10px] font-semibold tracking-wide text-accent-fg uppercase shadow-elevated"
+			>
+				{badge}
 			</span>
 		{/if}
 	</div>

@@ -4,17 +4,21 @@ import { sequence } from '@sveltejs/kit/hooks';
 import { getTextDirection } from '$lib/paraglide/runtime';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { SESSION_COOKIE_NAME, validateSessionToken } from '$lib/server/auth';
+import { refreshCalendarCache } from '$lib/server/jobs/refreshCalendar';
 import { refreshTrackedMetadata } from '$lib/server/jobs/refreshMetadata';
 import { syncAllLinkedJellyfinAccounts } from '$lib/server/jobs/syncJellyfin';
 import { PARAGLIDE_LOCALE_COOKIE } from '$lib/server/locale';
 
 const PUBLIC_ROUTES = ['/login', '/auth/callback'];
 
-// Module scope: runs once per server process start, not per-request.
-new Cron('0 3 * * *', () => {
-	refreshTrackedMetadata().catch((error) => {
-		console.error('[refreshMetadata] scheduled run failed', error);
-	});
+// Module scope: runs once per server process start, not per-request. Twice a day so the
+// calendar cache (which depends on this metadata) doesn't go a full day stale.
+new Cron('0 3,15 * * *', () => {
+	refreshTrackedMetadata()
+		.then(() => refreshCalendarCache())
+		.catch((error) => {
+			console.error('[refreshMetadata] scheduled run failed', error);
+		});
 });
 
 new Cron('0 * * * *', () => {

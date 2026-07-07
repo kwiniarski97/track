@@ -22,6 +22,32 @@
 		return dateFormatter.format(new Date(`${isoDate}T00:00:00Z`));
 	}
 
+	const MS_PER_DAY = 24 * 60 * 60 * 1000;
+	const today = new Date().toISOString().slice(0, 10);
+
+	// Both sides parsed as UTC midnight, so this is a whole-day count unaffected by the
+	// viewer's own timezone. Entries are always today-or-later (the cache only keeps
+	// upcoming dates), so this is never negative.
+	function daysUntil(isoDate: string): number {
+		return Math.round(
+			(new Date(`${isoDate}T00:00:00Z`).getTime() - new Date(`${today}T00:00:00Z`).getTime()) /
+				MS_PER_DAY
+		);
+	}
+
+	function dayCountFor(isoDate: string): string | null {
+		const days = daysUntil(isoDate);
+		return days <= 30 ? m.calendar_in_days({ days }) : null;
+	}
+
+	// Built here rather than cached, so it always renders in the viewer's current
+	// locale instead of whatever locale happened to be active when the cron job ran.
+	function detailFor(entry: CalendarEntry): string {
+		return entry.mediaType === 'tv'
+			? `S${entry.seasonNumber}E${entry.episodeNumber} — ${entry.episodeName}`
+			: m.calendar_release_label();
+	}
+
 	interface DateGroup {
 		date: string;
 		entries: CalendarEntry[];
@@ -51,11 +77,15 @@
 {:else}
 	<div class="flex flex-col gap-8">
 		{#each groups as { date, entries }, gi (date)}
+			{@const dayCount = dayCountFor(date)}
 			<section>
 				<h2
 					class="sticky top-0 z-10 -mx-4 mb-3 bg-bg/95 px-4 py-2 text-sm font-semibold text-text-muted backdrop-blur-sm md:top-14 md:-mx-6 md:px-6"
 				>
 					{formatDate(date)}
+					{#if dayCount}
+						<span class="font-normal text-text-faint">· {dayCount}</span>
+					{/if}
 				</h2>
 				<div class="flex flex-col gap-2">
 					{#each entries as entry, i (entry.mediaType + entry.tmdbId + entry.date)}
@@ -79,7 +109,7 @@
 							{/if}
 							<div class="min-w-0">
 								<p class="truncate text-sm font-medium text-text">{entry.title}</p>
-								<p class="text-xs text-text-muted">{entry.detail}</p>
+								<p class="text-xs text-text-muted">{detailFor(entry)}</p>
 							</div>
 						</a>
 					{/each}

@@ -17,7 +17,9 @@
 			: resolve('/movie/[tmdbId]', { tmdbId: String(item.tmdbId) });
 	}
 
-	const isEmpty = $derived(data.watching.length === 0 && data.planToWatch.length === 0);
+	const isEmpty = $derived(
+		data.watching.length === 0 && data.planToWatch.length === 0 && data.recentlyWatched.length === 0
+	);
 	// A blurred backdrop of the user's own posters, most-recently-tracked first --
 	// gives the dashboard a personal, cinematic feel instead of a flat header.
 	const heroPosters = $derived(
@@ -72,6 +74,22 @@
 		cta={{ label: m.home_empty_cta(), href: resolve('/search') }}
 	/>
 {:else}
+	{#if data.recentlyWatched.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_recently_watched_heading()}</h2>
+			<PosterGrid>
+				{#each data.recentlyWatched as item, i (item.mediaType + item.tmdbId)}
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						index={i}
+					/>
+				{/each}
+			</PosterGrid>
+		</section>
+	{/if}
+
 	{#if data.watching.length > 0}
 		<section class="mb-10">
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_watching_heading()}</h2>
@@ -81,6 +99,7 @@
 						href={hrefFor(item)}
 						title={item.title}
 						posterPath={item.posterPath}
+						badge={item.hasNewEpisode ? m.home_new_episode_badge() : null}
 						index={i}
 					/>
 				{/each}

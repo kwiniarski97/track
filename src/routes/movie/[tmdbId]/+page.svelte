@@ -34,34 +34,35 @@
 	backHref={resolve('/search')}
 	backLabel={m.back_to_search()}
 >
-	<div class="flex flex-wrap items-center gap-2">
-		<TrackButton
-			trackingStatus={data.trackingStatus}
-			trackLabel={m.track_this_movie()}
-			trackingLabel={m.tracking_status({ status: data.trackingStatus ?? '' })}
-			stopLabel={m.stop_tracking()}
-		/>
-		{#if data.inJellyfinLibrary}
-			<span class="rounded-pill bg-surface-2 px-3 py-1.5 text-xs font-medium text-text-muted">
-				{m.in_jellyfin_library()}
-			</span>
-		{/if}
-	</div>
-
-	<button
-		type="button"
-		onclick={() => toggleWatched(!isWatched)}
-		class="mt-4 flex items-center gap-2 rounded-pill border px-4 py-2 text-sm font-medium transition-colors {isWatched
-			? 'border-accent bg-accent/10 text-accent'
-			: 'border-border text-text-muted hover:border-border-strong hover:text-text'}"
-	>
-		<span
-			class="flex h-5 w-5 items-center justify-center rounded-full border transition-colors {isWatched
-				? 'bg-gradient-accent border-accent text-accent-fg'
-				: 'border-border-strong text-transparent'}"
-		>
-			<IconCheck size={12} />
-		</span>
-		{m.watched_label()}
-	</button>
+	{#snippet actions()}
+		<div class="flex flex-wrap items-center gap-2">
+			<TrackButton
+				trackingStatus={data.trackingStatus}
+				trackLabel={m.track_this_movie()}
+				trackingLabel={m.tracking_status({ status: data.trackingStatus ?? '' })}
+				stopLabel={m.stop_tracking()}
+			/>
+			{#if data.inJellyfinLibrary}
+				<span class="rounded-pill bg-surface-2 px-3 py-1.5 text-xs font-medium text-text-muted">
+					{m.in_jellyfin_library()}
+				</span>
+			{/if}
+			<button
+				type="button"
+				onclick={() => toggleWatched(!isWatched)}
+				class="flex items-center gap-2 rounded-pill border px-4 py-2 text-sm font-medium transition-colors {isWatched
+					? 'border-accent bg-accent/10 text-accent'
+					: 'border-border text-text-muted hover:border-border-strong hover:text-text'}"
+			>
+				<span
+					class="flex h-5 w-5 items-center justify-center rounded-full border transition-colors {isWatched
+						? 'bg-gradient-accent border-accent text-accent-fg'
+						: 'border-border-strong text-transparent'}"
+				>
+					<IconCheck size={12} />
+				</span>
+				{m.watched_label()}
+			</button>
+		</div>
+	{/snippet}
 </DetailHero>

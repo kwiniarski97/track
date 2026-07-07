@@ -38,7 +38,9 @@
 	const isEmpty = $derived(
 		data.stats.episodesWatched === 0 &&
 			data.stats.moviesWatched === 0 &&
+			data.watchingShows.length === 0 &&
 			data.completedShows.length === 0 &&
+			data.droppedShows.length === 0 &&
 			data.completedMovies.length === 0
 	);
 </script>
@@ -61,11 +63,33 @@
 		{/each}
 	</div>
 
+	{#if data.watchingShows.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_watching_heading()}</h2>
+			<PosterGrid>
+				{#each data.watchingShows as item, i (item.mediaType + item.tmdbId)}
+					<PosterCard href={hrefFor(item)} title={item.title} posterPath={item.posterPath} index={i} />
+				{/each}
+			</PosterGrid>
+		</section>
+	{/if}
+
 	{#if data.completedShows.length > 0}
 		<section class="mb-10">
-			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_completed_shows_heading()}</h2>
+			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_completed_heading()}</h2>
 			<PosterGrid>
 				{#each data.completedShows as item, i (item.mediaType + item.tmdbId)}
+					<PosterCard href={hrefFor(item)} title={item.title} posterPath={item.posterPath} index={i} />
+				{/each}
+			</PosterGrid>
+		</section>
+	{/if}
+
+	{#if data.droppedShows.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_dropped_heading()}</h2>
+			<PosterGrid>
+				{#each data.droppedShows as item, i (item.mediaType + item.tmdbId)}
 					<PosterCard href={hrefFor(item)} title={item.title} posterPath={item.posterPath} index={i} />
 				{/each}
 			</PosterGrid>

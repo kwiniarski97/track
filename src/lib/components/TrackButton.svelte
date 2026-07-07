@@ -8,12 +8,14 @@
 		trackingStatus,
 		trackLabel,
 		trackingLabel,
-		stopLabel
+		stopLabel,
+		stopAction = 'untrack'
 	}: {
 		trackingStatus: string | null;
 		trackLabel: string;
 		trackingLabel: string;
 		stopLabel: string;
+		stopAction?: string;
 	} = $props();
 
 	let buttonEl = $state<HTMLButtonElement>();
@@ -37,7 +39,7 @@
 			<IconCheck size={15} class="text-accent" />
 			{trackingLabel}
 		</span>
-		<form method="POST" action="?/untrack" use:enhance={submitEnhance}>
+		<form method="POST" action={`?/${stopAction}`} use:enhance={submitEnhance}>
 			<button
 				bind:this={buttonEl}
 				type="submit"

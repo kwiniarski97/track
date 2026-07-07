@@ -104,6 +104,36 @@ describe('syncShowCompletion', () => {
 		expect(await statusOf(userId)).toBe('plan_to_watch');
 	});
 
+	it('flips to "completed" when every regular episode is watched but specials are not', async () => {
+		await db
+			.insert(seasons)
+			.values({ showTmdbId: TMDB_ID, seasonNumber: 0, name: 'Specials', episodeCount: 2 })
+			.onConflictDoNothing();
+		await insertWatches(userId, ALL_EPISODES); // no season-0 watches logged
+
+		await syncShowCompletion(userId, TMDB_ID);
+
+		expect(await statusOf(userId)).toBe('completed');
+	});
+
+	it('stays "watching" when every cached episode is watched but the show is still airing', async () => {
+		await db.update(shows).set({ status: 'Returning Series' }).where(eq(shows.tmdbId, TMDB_ID));
+		await insertWatches(userId, ALL_EPISODES);
+
+		await syncShowCompletion(userId, TMDB_ID);
+
+		expect(await statusOf(userId)).toBe('watching');
+	});
+
+	it('flips to "completed" once an ended show has every cached episode watched', async () => {
+		await db.update(shows).set({ status: 'Ended' }).where(eq(shows.tmdbId, TMDB_ID));
+		await insertWatches(userId, ALL_EPISODES);
+
+		await syncShowCompletion(userId, TMDB_ID);
+
+		expect(await statusOf(userId)).toBe('completed');
+	});
+
 	it('leaves dropped untouched even if every episode is already logged', async () => {
 		await setStatus(userId, 'dropped');
 		await insertWatches(userId, ALL_EPISODES);
