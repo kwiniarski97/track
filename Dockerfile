@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# SvelteKit's postbuild route analysis imports server modules, which instantiate
+# the DB client at module load time — needs a value, but not a real database.
+ENV DATABASE_URL=:memory:
 RUN npm run build
 RUN npm prune --omit=dev
 
