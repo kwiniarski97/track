@@ -1,0 +1,21 @@
+services:
+  app:
+    image: ghcr.io/kwiniarski97/track:latest
+    pull_policy: always
+    user: '1001:2137'
+    ports:
+      - '3000:3000'
+    environment:
+      ORIGIN: ${ORIGIN}
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-20M}
+      DATABASE_URL: /app/data/db.sqlite
+      SESSION_SECRET: ${SESSION_SECRET}
+      TMDB_API_KEY: ${TMDB_API_KEY}
+      POCKET_ID_ISSUER: ${POCKET_ID_ISSUER}
+      POCKET_ID_CLIENT_ID: ${POCKET_ID_CLIENT_ID}
+      POCKET_ID_CLIENT_SECRET: ${POCKET_ID_CLIENT_SECRET}
+      JELLYFIN_URL: ${JELLYFIN_URL}
+      JELLYFIN_API_KEY: ${JELLYFIN_API_KEY}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
