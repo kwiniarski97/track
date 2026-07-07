@@ -54,6 +54,7 @@
 					? 'border-accent bg-accent/10 text-accent'
 					: 'border-border text-text-muted hover:border-border-strong hover:text-text'}"
 			>
+				{m.watched_label()}
 				<span
 					class="flex h-5 w-5 items-center justify-center rounded-full border transition-colors {isWatched
 						? 'bg-gradient-accent border-accent text-accent-fg'
@@ -61,7 +62,6 @@
 				>
 					<IconCheck size={12} />
 				</span>
-				{m.watched_label()}
 			</button>
 		</div>
 	{/snippet}

@@ -184,6 +184,11 @@
 	{#each data.seasons as season (season.season_number)}
 		<section id={`season-${season.season_number}`} class="mt-6 scroll-mt-24 md:scroll-mt-32">
 			<div class="mb-3 flex items-center gap-3">
+				<h2 class="text-lg font-semibold text-text">
+					{season.season_number === 0
+						? m.season_specials()
+						: m.season_heading({ number: season.season_number })}
+				</h2>
 				<button
 					type="button"
 					disabled={!isSeasonReleased(season.season_number)}
@@ -202,11 +207,6 @@
 						<IconCheck size={13} />
 					{/if}
 				</button>
-				<h2 class="text-lg font-semibold text-text">
-					{season.season_number === 0
-						? m.season_specials()
-						: m.season_heading({ number: season.season_number })}
-				</h2>
 			</div>
 
 			<div class="flex flex-col gap-2">
