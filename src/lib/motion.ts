@@ -36,13 +36,13 @@ export function reveal(node: HTMLElement, options: RevealOptions = {}) {
 
 /** Slides a shared indicator element behind the active tab/nav-link. */
 export function animateTabIndicator(indicator: HTMLElement, target: HTMLElement): void {
-	const parent = target.offsetParent as HTMLElement | null;
-	if (!parent) return;
+	if (!target.offsetParent) return;
 
-	const targetRect = target.getBoundingClientRect();
-	const parentRect = parent.getBoundingClientRect();
-	const x = targetRect.left - parentRect.left;
-	const { width, height } = targetRect;
+	// offsetLeft is relative to the offsetParent's padding edge -- the same origin
+	// `position: absolute; left` uses. Diffing getBoundingClientRect()s here instead
+	// would double-count the container's own padding and drift the indicator off target.
+	const x = target.offsetLeft;
+	const { width, height } = target.getBoundingClientRect();
 
 	if (reducedMotion()) {
 		gsap.set(indicator, { x, width, height });

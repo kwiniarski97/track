@@ -1,4 +1,4 @@
-import { integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // Mirrors the `locales` tuple in src/lib/paraglide/runtime.js -- kept as a plain literal
 // here rather than importing generated code into the schema module.
@@ -87,7 +87,10 @@ export const episodes = sqliteTable(
 		episodeNumber: integer('episode_number').notNull(),
 		title: text('title').notNull(),
 		airDate: text('air_date'),
-		runtime: integer('runtime')
+		runtime: integer('runtime'),
+		stillPath: text('still_path'),
+		voteAverage: real('vote_average'),
+		voteCount: integer('vote_count')
 	},
 	(t) => [
 		uniqueIndex('episodes_show_season_episode_unique').on(

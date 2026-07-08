@@ -195,6 +195,9 @@ export type TmdbSeasonDetails = {
 		name: string;
 		air_date: string | null;
 		runtime: number | null;
+		still_path: string | null;
+		vote_average: number;
+		vote_count: number;
 	}>;
 };
 

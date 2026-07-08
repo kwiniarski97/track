@@ -11,3 +11,7 @@ export function tmdbBackdropUrl(
 ): string | null {
 	return path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
 }
+
+export function tmdbStillUrl(path: string | null, size: 'w185' | 'w300' = 'w300'): string | null {
+	return path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
+}

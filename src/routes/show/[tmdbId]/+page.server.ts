@@ -22,11 +22,21 @@ async function ensureSeasonEpisodesCached(tmdbId: number, seasonNumber: number) 
 				episodeNumber: ep.episode_number,
 				title: ep.name,
 				airDate: ep.air_date,
-				runtime: ep.runtime
+				runtime: ep.runtime,
+				stillPath: ep.still_path,
+				voteAverage: ep.vote_average,
+				voteCount: ep.vote_count
 			})
 			.onConflictDoUpdate({
 				target: [episodes.showTmdbId, episodes.seasonNumber, episodes.episodeNumber],
-				set: { title: ep.name, airDate: ep.air_date, runtime: ep.runtime }
+				set: {
+					title: ep.name,
+					airDate: ep.air_date,
+					runtime: ep.runtime,
+					stillPath: ep.still_path,
+					voteAverage: ep.vote_average,
+					voteCount: ep.vote_count
+				}
 			});
 	}
 }
@@ -39,13 +49,13 @@ async function ensureAllSeasonsEpisodesCached(
 ) {
 	for (const season of seasonsList) {
 		const [existing] = await db
-			.select({ runtime: episodes.runtime })
+			.select({ runtime: episodes.runtime, voteAverage: episodes.voteAverage })
 			.from(episodes)
 			.where(and(eq(episodes.showTmdbId, tmdbId), eq(episodes.seasonNumber, season.season_number)))
 			.limit(1);
-		// Also recache if runtime is missing, so seasons cached before that column existed
-		// get backfilled the next time someone opens the show.
-		if (!existing || existing.runtime === null) {
+		// Also recache if runtime/voteAverage are missing, so seasons cached before those
+		// columns existed get backfilled the next time someone opens the show.
+		if (!existing || existing.runtime === null || existing.voteAverage === null) {
 			await ensureSeasonEpisodesCached(tmdbId, season.season_number);
 		}
 	}
@@ -55,14 +65,13 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const tmdbId = Number(params.tmdbId);
 	const details = await ensureShowCached(tmdbId);
 
-	// TMDB lists "Specials" as season 0, first in the array -- move it to the end and
-	// default to season 1+ instead.
+	// Show newest season first, oldest last -- but "Specials" (season 0) always last.
 	const seasonsWithEpisodes = details.seasons
 		.filter((s) => s.episode_count > 0)
 		.sort((a, b) => {
 			if (a.season_number === 0) return 1;
 			if (b.season_number === 0) return -1;
-			return a.season_number - b.season_number;
+			return b.season_number - a.season_number;
 		});
 	const defaultSeason =
 		seasonsWithEpisodes.find((s) => s.season_number > 0) ?? seasonsWithEpisodes[0];

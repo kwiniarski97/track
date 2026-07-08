@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { getLocale } from '$lib/paraglide/runtime';
 	import { m } from '$lib/paraglide/messages';
+	import { showStatusLabel, trackingStatusLabel } from '$lib/labels';
 	import { getPendingWatchOverride } from '$lib/client/db';
 	import { queueWatch } from '$lib/client/outbox';
 	import DetailHero from '$lib/components/DetailHero.svelte';
@@ -155,7 +156,7 @@
 	posterPath={data.show.poster_path}
 	title={data.show.name}
 	overview={data.show.overview}
-	meta={m.show_status_label({ status: data.show.status })}
+	meta={m.show_status_label({ status: showStatusLabel(data.show.status) })}
 	backHref={resolve('/search')}
 	backLabel={m.back()}
 >
@@ -164,7 +165,9 @@
 			<TrackButton
 				trackingStatus={data.trackingStatus}
 				trackLabel={m.track_this_show()}
-				trackingLabel={m.tracking_status({ status: data.trackingStatus ?? '' })}
+				trackingLabel={m.tracking_status({
+					status: trackingStatusLabel(data.trackingStatus ?? '')
+				})}
 				stopLabel={canDrop ? m.stop_watching() : m.stop_tracking()}
 				stopAction={canDrop ? 'drop' : 'untrack'}
 			/>
@@ -218,6 +221,10 @@
 						title={episode.title}
 						watched={isWatched(season.season_number, episode.episodeNumber)}
 						unreleasedNote={unreleasedNoteFor(episode.airDate)}
+						stillPath={episode.stillPath}
+						runtime={episode.runtime}
+						voteAverage={episode.voteAverage}
+						voteCount={episode.voteCount}
 						onToggle={(watched) =>
 							toggleEpisode(season.season_number, episode.episodeNumber, watched)}
 					/>

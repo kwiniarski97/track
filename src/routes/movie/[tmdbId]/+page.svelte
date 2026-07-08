@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { m } from '$lib/paraglide/messages';
+	import { trackingStatusLabel } from '$lib/labels';
 	import { NO_EPISODE, getPendingWatchOverride } from '$lib/client/db';
 	import { queueWatch } from '$lib/client/outbox';
 	import DetailHero from '$lib/components/DetailHero.svelte';
@@ -40,7 +41,9 @@
 			<TrackButton
 				trackingStatus={data.trackingStatus}
 				trackLabel={m.track_this_movie()}
-				trackingLabel={m.tracking_status({ status: data.trackingStatus ?? '' })}
+				trackingLabel={m.tracking_status({
+					status: trackingStatusLabel(data.trackingStatus ?? '')
+				})}
 				stopLabel={m.stop_tracking()}
 			/>
 			{#if data.inJellyfinLibrary}

@@ -63,7 +63,7 @@
 >
 	<span
 		bind:this={indicatorEl}
-		class="bg-gradient-accent pointer-events-none absolute top-1 left-1 rounded-pill shadow-glow"
+		class="bg-gradient-accent pointer-events-none absolute top-1 left-0 rounded-pill shadow-glow"
 		style="height: 0; width: 0;"
 	></span>
 	{#each seasons as season (season.season_number)}
@@ -72,7 +72,7 @@
 			href={`#season-${season.season_number}`}
 			data-active={active}
 			onclick={(event) => scrollToSeason(event, season.season_number)}
-			class="relative z-10 flex-none rounded-pill px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors {active
+			class="relative z-10 flex-none inline-flex items-center justify-center rounded-pill px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors {active
 				? 'text-accent-fg'
 				: 'text-text-muted hover:text-text'}"
 		>
