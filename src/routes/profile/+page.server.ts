@@ -9,6 +9,12 @@ import {
 	type TrackingStatus
 } from '$lib/server/db/schema';
 import { getShowProgress, type ShowProgress } from '$lib/server/media';
+import {
+	PROFILE_SORTS,
+	sortProfileItems,
+	type ProfileSort,
+	type SortableItem
+} from '$lib/server/profileSort';
 import type { PageServerLoad } from './$types';
 
 export interface CompletedItem {
@@ -21,8 +27,13 @@ export interface CompletedItem {
 
 const MY_SHOWS_STATUSES: TrackingStatus[] = ['watching', 'completed', 'dropped'];
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const userId = locals.user!.id;
+
+	const sortParam = url.searchParams.get('sort');
+	const sort: ProfileSort = PROFILE_SORTS.includes(sortParam as ProfileSort)
+		? (sortParam as ProfileSort)
+		: 'added_desc';
 
 	const [episodeStats] = await db
 		.select({
@@ -61,7 +72,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		);
 
 	const watchedMovieRows = await db
-		.select({ tmdbId: userWatches.tmdbId })
+		.select({ tmdbId: userWatches.tmdbId, watchedAt: userWatches.watchedAt })
 		.from(userWatches)
 		.where(and(eq(userWatches.userId, userId), eq(userWatches.mediaType, 'movie')));
 
@@ -76,6 +87,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		: [];
 
 	const showById = new Map(showRows.map((s) => [s.tmdbId, s]));
+	const watchedAtByMovieId = new Map(watchedMovieRows.map((r) => [r.tmdbId, r.watchedAt]));
 
 	const progressByShowId = await getShowProgress(
 		userId,
@@ -83,33 +95,47 @@ export const load: PageServerLoad = async ({ locals }) => {
 	);
 
 	function showsWithStatus(status: TrackingStatus): CompletedItem[] {
-		return myShowTracking
+		const sortable = myShowTracking
 			.filter((t) => t.status === status)
-			.map((t): CompletedItem | null => {
+			.map((t): SortableItem<CompletedItem> | null => {
 				const show = showById.get(t.tmdbId);
 				return show
 					? {
-							mediaType: 'tv',
-							tmdbId: t.tmdbId,
+							item: {
+								mediaType: 'tv',
+								tmdbId: t.tmdbId,
+								title: show.title,
+								posterPath: show.posterPath,
+								progress: progressByShowId.get(t.tmdbId) ?? null
+							},
 							title: show.title,
-							posterPath: show.posterPath,
-							progress: progressByShowId.get(t.tmdbId) ?? null
+							addedAt: t.createdAt.getTime(),
+							releaseDate: show.firstAirDate
 						}
 					: null;
 			})
-			.filter((item): item is CompletedItem => item !== null);
+			.filter((s): s is SortableItem<CompletedItem> => s !== null);
+		return sortProfileItems(sortable, sort);
 	}
 
 	const watchingShows = showsWithStatus('watching');
 	const completedShows = showsWithStatus('completed');
 	const droppedShows = showsWithStatus('dropped');
 
-	const completedMovies: CompletedItem[] = movieRows.map((mv) => ({
-		mediaType: 'movie',
-		tmdbId: mv.tmdbId,
-		title: mv.title,
-		posterPath: mv.posterPath
-	}));
+	const completedMovies: CompletedItem[] = sortProfileItems(
+		movieRows.map((mv): SortableItem<CompletedItem> => ({
+			item: {
+				mediaType: 'movie',
+				tmdbId: mv.tmdbId,
+				title: mv.title,
+				posterPath: mv.posterPath
+			},
+			title: mv.title,
+			addedAt: (watchedAtByMovieId.get(mv.tmdbId) ?? new Date(0)).getTime(),
+			releaseDate: mv.releaseDate
+		})),
+		sort
+	);
 
 	return {
 		stats: {
@@ -118,6 +144,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			showsCompleted: completedShows.length,
 			moviesWatched: Number(movieStats.count)
 		},
+		sort,
 		watchingShows,
 		completedShows,
 		droppedShows,

@@ -123,5 +123,10 @@
 	"profile_dropped_heading": "Porzucone",
 	"profile_completed_movies_heading": "Obejrzane filmy",
 	"profile_empty_heading": "Brak jeszcze statystyk",
-	"profile_empty_body": "Śledź i oznaczaj odcinki lub filmy jako obejrzane, aby zobaczyć tutaj swoje statystyki."
+	"profile_empty_body": "Śledź i oznaczaj odcinki lub filmy jako obejrzane, aby zobaczyć tutaj swoje statystyki.",
+	"profile_sort_label": "Sortuj według",
+	"profile_sort_title": "Tytuł (A–Z)",
+	"profile_sort_released": "Data premiery",
+	"profile_sort_added_asc": "Najstarsze dodane",
+	"profile_sort_added_desc": "Najnowsze dodane"
 }

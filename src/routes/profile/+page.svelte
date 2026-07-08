@@ -63,6 +63,21 @@
 		{/each}
 	</div>
 
+	<form method="GET" class="mb-6 flex justify-end">
+		<select
+			name="sort"
+			value={data.sort}
+			onchange={(e) => e.currentTarget.form?.requestSubmit()}
+			aria-label={m.profile_sort_label()}
+			class="rounded-pill border border-border bg-surface px-4 py-2 text-sm text-text focus:border-accent focus:outline-none"
+		>
+			<option value="title">{m.profile_sort_title()}</option>
+			<option value="released">{m.profile_sort_released()}</option>
+			<option value="added_asc">{m.profile_sort_added_asc()}</option>
+			<option value="added_desc">{m.profile_sort_added_desc()}</option>
+		</select>
+	</form>
+
 	{#if data.watchingShows.length > 0}
 		<section class="mb-10">
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_watching_heading()}</h2>

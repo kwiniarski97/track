@@ -123,5 +123,10 @@
 	"profile_dropped_heading": "Abandoned",
 	"profile_completed_movies_heading": "Watched movies",
 	"profile_empty_heading": "No stats yet",
-	"profile_empty_body": "Track and mark episodes or movies as watched to see your stats here."
+	"profile_empty_body": "Track and mark episodes or movies as watched to see your stats here.",
+	"profile_sort_label": "Sort by",
+	"profile_sort_title": "Title (A–Z)",
+	"profile_sort_released": "Last released",
+	"profile_sort_added_asc": "Oldest added",
+	"profile_sort_added_desc": "Newest added"
 }
