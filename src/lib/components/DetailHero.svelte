@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ResolvedPathname } from '$app/types';
+	import { afterNavigate } from '$app/navigation';
 	import { tmdbBackdropUrl, tmdbPosterUrl } from '$lib/tmdb-client';
 	import IconChevronLeft from './icons/IconChevronLeft.svelte';
 
@@ -28,6 +29,21 @@
 
 	const backdrop = $derived(tmdbBackdropUrl(backdropPath));
 	const poster = $derived(tmdbPosterUrl(posterPath, 'w500'));
+
+	// If we arrived here via an in-app navigation, prefer real browser back
+	// (returns to wherever the user actually came from -- home, calendar,
+	// search, another show, etc.) instead of always landing on backHref.
+	let hasInAppHistory = $state(false);
+	afterNavigate(({ from }) => {
+		hasInAppHistory = from !== null;
+	});
+
+	function handleBackClick(event: MouseEvent) {
+		if (hasInAppHistory) {
+			event.preventDefault();
+			history.back();
+		}
+	}
 </script>
 
 <div class="relative -mx-4 -mt-6 overflow-hidden rounded-b-panel md:-mx-6 md:-mt-10">
@@ -47,6 +63,7 @@
 
 	<a
 		href={backHref}
+		onclick={handleBackClick}
 		class="glass absolute top-4 left-4 z-10 flex items-center gap-1 rounded-pill px-3 py-1.5 text-sm font-medium text-text md:top-6 md:left-6"
 	>
 		<IconChevronLeft size={16} />

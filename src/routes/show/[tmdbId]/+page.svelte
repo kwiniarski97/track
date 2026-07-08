@@ -156,7 +156,7 @@
 	overview={data.show.overview}
 	meta={m.show_status_label({ status: data.show.status })}
 	backHref={resolve('/search')}
-	backLabel={m.back_to_search()}
+	backLabel={m.back()}
 >
 	{#snippet actions()}
 		<div class="flex flex-wrap items-center gap-2">

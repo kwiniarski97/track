@@ -31,6 +31,7 @@
 
 	"back_to_search": "← Search",
 	"back_to_home": "← Home",
+	"back": "Back",
 	"show_status_label": "Status: {status}",
 	"in_jellyfin_library": "In your Jellyfin library",
 	"track_this_show": "Track this show",

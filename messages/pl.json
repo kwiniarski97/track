@@ -31,6 +31,7 @@
 
 	"back_to_search": "← Szukaj",
 	"back_to_home": "← Strona główna",
+	"back": "Wstecz",
 	"show_status_label": "Status: {status}",
 	"in_jellyfin_library": "W Twojej bibliotece Jellyfin",
 	"track_this_show": "Śledź ten serial",

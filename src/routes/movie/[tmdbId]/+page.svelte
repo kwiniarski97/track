@@ -32,7 +32,7 @@
 	title={data.movie.title}
 	overview={data.movie.overview}
 	backHref={resolve('/search')}
-	backLabel={m.back_to_search()}
+	backLabel={m.back()}
 >
 	{#snippet actions()}
 		<div class="flex flex-wrap items-center gap-2">
