@@ -1,6 +1,14 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from './db';
-import { movies, seasons, shows, userTracking, userWatches } from './db/schema';
+import {
+	episodes,
+	movies,
+	seasons,
+	shows,
+	userTracking,
+	userWatches,
+	type TrackingStatus
+} from './db/schema';
 import {
 	getMovieDetails,
 	getShowDetails,
@@ -102,7 +110,10 @@ export async function syncShowCompletion(userId: string, tmdbId: number): Promis
 		);
 	if (!tracking || (tracking.status !== 'watching' && tracking.status !== 'completed')) return;
 
-	const [showRow] = await db.select({ status: shows.status }).from(shows).where(eq(shows.tmdbId, tmdbId));
+	const [showRow] = await db
+		.select({ status: shows.status })
+		.from(shows)
+		.where(eq(shows.tmdbId, tmdbId));
 	// Unknown status (show not cached) falls back to the old behavior rather than
 	// blocking completion forever.
 	const showHasEnded = !showRow?.status || ENDED_SHOW_STATUSES.has(showRow.status);
@@ -131,4 +142,79 @@ export async function syncShowCompletion(userId: string, tmdbId: number): Promis
 			.set({ status: newStatus })
 			.where(eq(userTracking.id, tracking.id));
 	}
+}
+
+export interface ShowProgress {
+	watched: number;
+	total: number;
+	state: 'completed' | 'up_to_date' | 'behind';
+}
+
+/** Per-show watched/total episode counts (specials excluded) for the progress bar on
+ * show cards, plus a `state` driving its color: 'completed' mirrors the tracking
+ * status, 'up_to_date' means every aired episode has been watched (the show can still
+ * have unaired episodes counted in `total`), and 'behind' means at least one aired
+ * episode is unwatched. Shows with no cached season data (never opened) are omitted so
+ * callers can hide the bar instead of showing a meaningless 0/0. */
+export async function getShowProgress(
+	userId: string,
+	showsInput: Array<{ tmdbId: number; trackingStatus: TrackingStatus }>
+): Promise<Map<number, ShowProgress>> {
+	const tmdbIds = showsInput.map((s) => s.tmdbId);
+	if (tmdbIds.length === 0) return new Map();
+
+	const today = new Date().toISOString().slice(0, 10);
+
+	const totalRows = await db
+		.select({
+			showTmdbId: seasons.showTmdbId,
+			total: sql<number>`coalesce(sum(${seasons.episodeCount}), 0)`
+		})
+		.from(seasons)
+		.where(and(inArray(seasons.showTmdbId, tmdbIds), sql`${seasons.seasonNumber} != 0`))
+		.groupBy(seasons.showTmdbId);
+
+	const airedRows = await db
+		.select({ showTmdbId: episodes.showTmdbId, aired: sql<number>`count(*)` })
+		.from(episodes)
+		.where(
+			and(
+				inArray(episodes.showTmdbId, tmdbIds),
+				sql`${episodes.seasonNumber} != 0`,
+				sql`${episodes.airDate} is not null`,
+				lte(episodes.airDate, today)
+			)
+		)
+		.groupBy(episodes.showTmdbId);
+
+	const watchedRows = await db
+		.select({ tmdbId: userWatches.tmdbId, watched: sql<number>`count(*)` })
+		.from(userWatches)
+		.where(
+			and(
+				eq(userWatches.userId, userId),
+				eq(userWatches.mediaType, 'tv'),
+				inArray(userWatches.tmdbId, tmdbIds),
+				sql`${userWatches.seasonNumber} != 0`
+			)
+		)
+		.groupBy(userWatches.tmdbId);
+
+	const totalByShow = new Map(totalRows.map((r) => [r.showTmdbId, r.total]));
+	const airedByShow = new Map(airedRows.map((r) => [r.showTmdbId, r.aired]));
+	const watchedByShow = new Map(watchedRows.map((r) => [r.tmdbId, r.watched]));
+
+	const result = new Map<number, ShowProgress>();
+	for (const { tmdbId, trackingStatus } of showsInput) {
+		const total = totalByShow.get(tmdbId) ?? 0;
+		if (total === 0) continue;
+
+		const watched = watchedByShow.get(tmdbId) ?? 0;
+		const aired = airedByShow.get(tmdbId) ?? 0;
+		const state: ShowProgress['state'] =
+			trackingStatus === 'completed' ? 'completed' : watched >= aired ? 'up_to_date' : 'behind';
+
+		result.set(tmdbId, { watched, total, state });
+	}
+	return result;
 }

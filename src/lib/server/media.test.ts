@@ -1,8 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
-import { seasons, shows, userTracking, userWatches, users, type TrackingStatus } from './db/schema';
-import { syncShowCompletion } from './media';
+import {
+	episodes,
+	seasons,
+	shows,
+	userTracking,
+	userWatches,
+	users,
+	type TrackingStatus
+} from './db/schema';
+import { getShowProgress, syncShowCompletion } from './media';
+
+function daysAgo(n: number): string {
+	return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 const TMDB_ID = 999001;
 
@@ -147,5 +159,116 @@ describe('syncShowCompletion', () => {
 		await db.delete(userTracking).where(eq(userTracking.userId, userId));
 
 		await expect(syncShowCompletion(userId, TMDB_ID)).resolves.not.toThrow();
+	});
+});
+
+describe('getShowProgress', () => {
+	let userId: string;
+
+	const BEHIND_ID = 999011;
+	const UP_TO_DATE_ID = 999012;
+	const COMPLETED_ID = 999013;
+	const NEVER_OPENED_ID = 999014;
+
+	beforeEach(async () => {
+		const [user] = await db
+			.insert(users)
+			.values({ pocketIdSub: crypto.randomUUID(), email: 'test@example.com', name: 'Test User' })
+			.returning();
+		userId = user.id;
+
+		await db
+			.insert(shows)
+			.values([
+				{ tmdbId: BEHIND_ID, title: 'Behind Show' },
+				{ tmdbId: UP_TO_DATE_ID, title: 'Up To Date Show' },
+				{ tmdbId: COMPLETED_ID, title: 'Completed Show' },
+				{ tmdbId: NEVER_OPENED_ID, title: 'Never Opened Show' }
+			])
+			.onConflictDoNothing();
+
+		// 5 regular episodes + 1 special per show; the special must never count toward
+		// either watched or total.
+		for (const tmdbId of [BEHIND_ID, UP_TO_DATE_ID, COMPLETED_ID]) {
+			await db
+				.insert(seasons)
+				.values([
+					{ showTmdbId: tmdbId, seasonNumber: 0, name: 'Specials', episodeCount: 1 },
+					{ showTmdbId: tmdbId, seasonNumber: 1, name: 'Season 1', episodeCount: 5 }
+				])
+				.onConflictDoNothing();
+
+			await db.insert(episodes).values([
+				{
+					showTmdbId: tmdbId,
+					seasonNumber: 0,
+					episodeNumber: 1,
+					title: 'Special',
+					airDate: daysAgo(10)
+				},
+				{
+					showTmdbId: tmdbId,
+					seasonNumber: 1,
+					episodeNumber: 1,
+					title: 'E1',
+					airDate: daysAgo(40)
+				},
+				{
+					showTmdbId: tmdbId,
+					seasonNumber: 1,
+					episodeNumber: 2,
+					title: 'E2',
+					airDate: daysAgo(30)
+				},
+				{ showTmdbId: tmdbId, seasonNumber: 1, episodeNumber: 3, title: 'E3', airDate: daysAgo(20) }
+				// Episodes 4-5 are unaired -- included in `total` via seasons.episodeCount but
+				// not in `episodes`, so they can't count as "watched" or "behind".
+			]);
+		}
+
+		await db.insert(userTracking).values([
+			{ userId, mediaType: 'tv', tmdbId: BEHIND_ID, status: 'watching' },
+			{ userId, mediaType: 'tv', tmdbId: UP_TO_DATE_ID, status: 'watching' },
+			{ userId, mediaType: 'tv', tmdbId: COMPLETED_ID, status: 'completed' },
+			{ userId, mediaType: 'tv', tmdbId: NEVER_OPENED_ID, status: 'watching' }
+		]);
+
+		await db.insert(userWatches).values([
+			// Behind: only E1 watched of 3 aired -> behind.
+			{ userId, mediaType: 'tv', tmdbId: BEHIND_ID, seasonNumber: 1, episodeNumber: 1 },
+			// Up to date: all 3 aired episodes watched, 2 unaired remain in `total`.
+			{ userId, mediaType: 'tv', tmdbId: UP_TO_DATE_ID, seasonNumber: 1, episodeNumber: 1 },
+			{ userId, mediaType: 'tv', tmdbId: UP_TO_DATE_ID, seasonNumber: 1, episodeNumber: 2 },
+			{ userId, mediaType: 'tv', tmdbId: UP_TO_DATE_ID, seasonNumber: 1, episodeNumber: 3 },
+			// Completed: all 3 aired episodes watched too.
+			{ userId, mediaType: 'tv', tmdbId: COMPLETED_ID, seasonNumber: 1, episodeNumber: 1 },
+			{ userId, mediaType: 'tv', tmdbId: COMPLETED_ID, seasonNumber: 1, episodeNumber: 2 },
+			{ userId, mediaType: 'tv', tmdbId: COMPLETED_ID, seasonNumber: 1, episodeNumber: 3 }
+		]);
+	});
+
+	afterEach(async () => {
+		for (const tmdbId of [BEHIND_ID, UP_TO_DATE_ID, COMPLETED_ID]) {
+			await db.delete(episodes).where(eq(episodes.showTmdbId, tmdbId));
+			await db.delete(seasons).where(eq(seasons.showTmdbId, tmdbId));
+		}
+		await db.delete(userWatches).where(eq(userWatches.userId, userId));
+		await db.delete(userTracking).where(eq(userTracking.userId, userId));
+		await db.delete(users).where(eq(users.id, userId));
+	});
+
+	it('computes watched/total (specials excluded) and a color state per show', async () => {
+		const result = await getShowProgress(userId, [
+			{ tmdbId: BEHIND_ID, trackingStatus: 'watching' },
+			{ tmdbId: UP_TO_DATE_ID, trackingStatus: 'watching' },
+			{ tmdbId: COMPLETED_ID, trackingStatus: 'completed' },
+			{ tmdbId: NEVER_OPENED_ID, trackingStatus: 'watching' }
+		]);
+
+		expect(result.get(BEHIND_ID)).toEqual({ watched: 1, total: 5, state: 'behind' });
+		expect(result.get(UP_TO_DATE_ID)).toEqual({ watched: 3, total: 5, state: 'up_to_date' });
+		expect(result.get(COMPLETED_ID)).toEqual({ watched: 3, total: 5, state: 'completed' });
+		// No seasons cache at all -- omitted rather than a misleading 0/0.
+		expect(result.has(NEVER_OPENED_ID)).toBe(false);
 	});
 });

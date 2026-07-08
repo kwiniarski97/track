@@ -8,6 +8,7 @@ import {
 	userWatches,
 	type TrackingStatus
 } from '$lib/server/db/schema';
+import { getShowProgress, type ShowProgress } from '$lib/server/media';
 import type { PageServerLoad } from './$types';
 
 export interface TrackedItem {
@@ -15,6 +16,7 @@ export interface TrackedItem {
 	tmdbId: number;
 	title: string;
 	posterPath: string | null;
+	progress?: ShowProgress | null;
 }
 
 const SECTION_STATUSES: TrackingStatus[] = ['watching', 'plan_to_watch'];
@@ -140,21 +142,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	}
 
-	function toItem(t: (typeof tracking)[number]): TrackedItem | null {
-		if (t.mediaType === 'tv') {
-			const show = showById.get(t.tmdbId);
-			return show
-				? { mediaType: 'tv', tmdbId: t.tmdbId, title: show.title, posterPath: show.posterPath }
-				: null;
-		}
-		const movie = movieById.get(t.tmdbId);
-		return movie
-			? { mediaType: 'movie', tmdbId: t.tmdbId, title: movie.title, posterPath: movie.posterPath }
-			: null;
-	}
-
-	const isTrackedItem = (item: TrackedItem | null): item is TrackedItem => item !== null;
-
 	// Most-recently-watched distinct series, regardless of tracking status -- a show
 	// dropped or completed can still surface here if an episode was just (re)watched.
 	const recentWatches = await db
@@ -174,11 +161,63 @@ export const load: PageServerLoad = async ({ locals }) => {
 		: [];
 	const recentShowById = new Map(recentShowRows.map((s) => [s.tmdbId, s]));
 
+	// The progress bar's "completed" state needs each show's real tracking status, which
+	// for recently-watched shows may fall outside SECTION_STATUSES (e.g. dropped) or be
+	// missing entirely (watches logged with no tracking row, e.g. via Jellyfin).
+	const progressShowIds = [...new Set([...showIds, ...recentShowIds])];
+	const progressTrackingRows = progressShowIds.length
+		? await db
+				.select({ tmdbId: userTracking.tmdbId, status: userTracking.status })
+				.from(userTracking)
+				.where(
+					and(
+						eq(userTracking.userId, userId),
+						eq(userTracking.mediaType, 'tv'),
+						inArray(userTracking.tmdbId, progressShowIds)
+					)
+				)
+		: [];
+	const progressTrackingStatusById = new Map(progressTrackingRows.map((r) => [r.tmdbId, r.status]));
+	const progressByShowId = await getShowProgress(
+		userId,
+		progressShowIds.map((tmdbId) => ({
+			tmdbId,
+			trackingStatus: progressTrackingStatusById.get(tmdbId) ?? 'watching'
+		}))
+	);
+
+	function toItem(t: (typeof tracking)[number]): TrackedItem | null {
+		if (t.mediaType === 'tv') {
+			const show = showById.get(t.tmdbId);
+			return show
+				? {
+						mediaType: 'tv',
+						tmdbId: t.tmdbId,
+						title: show.title,
+						posterPath: show.posterPath,
+						progress: progressByShowId.get(t.tmdbId) ?? null
+					}
+				: null;
+		}
+		const movie = movieById.get(t.tmdbId);
+		return movie
+			? { mediaType: 'movie', tmdbId: t.tmdbId, title: movie.title, posterPath: movie.posterPath }
+			: null;
+	}
+
+	const isTrackedItem = (item: TrackedItem | null): item is TrackedItem => item !== null;
+
 	const recentlyWatched: TrackedItem[] = recentWatches
 		.map((r): TrackedItem | null => {
 			const show = recentShowById.get(r.tmdbId);
 			return show
-				? { mediaType: 'tv', tmdbId: r.tmdbId, title: show.title, posterPath: show.posterPath }
+				? {
+						mediaType: 'tv',
+						tmdbId: r.tmdbId,
+						title: show.title,
+						posterPath: show.posterPath,
+						progress: progressByShowId.get(r.tmdbId) ?? null
+					}
 				: null;
 		})
 		.filter(isTrackedItem);

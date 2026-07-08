@@ -94,6 +94,7 @@
 						href={hrefFor(item)}
 						title={item.title}
 						posterPath={item.posterPath}
+						progress={item.progress}
 						index={i}
 					/>
 				{/each}
@@ -111,6 +112,7 @@
 						title={item.title}
 						posterPath={item.posterPath}
 						badge={m.home_new_episode_badge()}
+						progress={item.progress}
 						index={i}
 					/>
 				{/each}
@@ -127,6 +129,7 @@
 						href={hrefFor(item)}
 						title={item.title}
 						posterPath={item.posterPath}
+						progress={item.progress}
 						index={i}
 					/>
 				{/each}
@@ -145,6 +148,7 @@
 						href={hrefFor(item)}
 						title={item.title}
 						posterPath={item.posterPath}
+						progress={item.progress}
 						index={i}
 					/>
 				{/each}
@@ -161,6 +165,7 @@
 						href={hrefFor(item)}
 						title={item.title}
 						posterPath={item.posterPath}
+						progress={item.progress}
 						index={i}
 					/>
 				{/each}
@@ -177,6 +182,7 @@
 						href={hrefFor(item)}
 						title={item.title}
 						posterPath={item.posterPath}
+						progress={item.progress}
 						index={i}
 					/>
 				{/each}

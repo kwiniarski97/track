@@ -11,6 +11,7 @@
 		subtitle = null,
 		watched = false,
 		badge = null,
+		progress = null,
 		index = 0
 	}: {
 		href: ResolvedPathname;
@@ -19,10 +20,25 @@
 		subtitle?: string | null;
 		watched?: boolean;
 		badge?: string | null;
+		progress?: {
+			watched: number;
+			total: number;
+			state: 'completed' | 'up_to_date' | 'behind';
+		} | null;
 		index?: number;
 	} = $props();
 
 	const poster = $derived(tmdbPosterUrl(posterPath));
+	const progressPercent = $derived(
+		progress ? Math.max(4, Math.min(100, (progress.watched / progress.total) * 100)) : 0
+	);
+	const progressColorClass = $derived(
+		progress?.state === 'completed'
+			? 'bg-gradient-accent'
+			: progress?.state === 'up_to_date'
+				? 'bg-success'
+				: 'bg-warning'
+	);
 </script>
 
 <a {href} use:reveal={{ index }} class="group block">
@@ -59,6 +75,14 @@
 			>
 				{badge}
 			</span>
+		{/if}
+		{#if progress}
+			<div
+				class="absolute inset-x-0 bottom-0 h-1 bg-black/40"
+				title={`${progress.watched}/${progress.total}`}
+			>
+				<div class={`h-full ${progressColorClass}`} style={`width: ${progressPercent}%`}></div>
+			</div>
 		{/if}
 	</div>
 	<p class="mt-2 line-clamp-2 text-sm font-medium text-text">{title}</p>

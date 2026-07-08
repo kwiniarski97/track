@@ -8,6 +8,7 @@ import {
 	userWatches,
 	type TrackingStatus
 } from '$lib/server/db/schema';
+import { getShowProgress, type ShowProgress } from '$lib/server/media';
 import type { PageServerLoad } from './$types';
 
 export interface CompletedItem {
@@ -15,6 +16,7 @@ export interface CompletedItem {
 	tmdbId: number;
 	title: string;
 	posterPath: string | null;
+	progress?: ShowProgress | null;
 }
 
 const MY_SHOWS_STATUSES: TrackingStatus[] = ['watching', 'completed', 'dropped'];
@@ -75,13 +77,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const showById = new Map(showRows.map((s) => [s.tmdbId, s]));
 
+	const progressByShowId = await getShowProgress(
+		userId,
+		myShowTracking.map((t) => ({ tmdbId: t.tmdbId, trackingStatus: t.status }))
+	);
+
 	function showsWithStatus(status: TrackingStatus): CompletedItem[] {
 		return myShowTracking
 			.filter((t) => t.status === status)
 			.map((t): CompletedItem | null => {
 				const show = showById.get(t.tmdbId);
 				return show
-					? { mediaType: 'tv', tmdbId: t.tmdbId, title: show.title, posterPath: show.posterPath }
+					? {
+							mediaType: 'tv',
+							tmdbId: t.tmdbId,
+							title: show.title,
+							posterPath: show.posterPath,
+							progress: progressByShowId.get(t.tmdbId) ?? null
+						}
 					: null;
 			})
 			.filter((item): item is CompletedItem => item !== null);

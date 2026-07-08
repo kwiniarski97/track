@@ -68,7 +68,13 @@
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_watching_heading()}</h2>
 			<PosterGrid>
 				{#each data.watchingShows as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard href={hrefFor(item)} title={item.title} posterPath={item.posterPath} index={i} />
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						progress={item.progress}
+						index={i}
+					/>
 				{/each}
 			</PosterGrid>
 		</section>
@@ -79,7 +85,13 @@
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_completed_heading()}</h2>
 			<PosterGrid>
 				{#each data.completedShows as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard href={hrefFor(item)} title={item.title} posterPath={item.posterPath} index={i} />
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						progress={item.progress}
+						index={i}
+					/>
 				{/each}
 			</PosterGrid>
 		</section>
@@ -90,7 +102,13 @@
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_dropped_heading()}</h2>
 			<PosterGrid>
 				{#each data.droppedShows as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard href={hrefFor(item)} title={item.title} posterPath={item.posterPath} index={i} />
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						progress={item.progress}
+						index={i}
+					/>
 				{/each}
 			</PosterGrid>
 		</section>
@@ -101,7 +119,12 @@
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_completed_movies_heading()}</h2>
 			<PosterGrid>
 				{#each data.completedMovies as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard href={hrefFor(item)} title={item.title} posterPath={item.posterPath} index={i} />
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						index={i}
+					/>
 				{/each}
 			</PosterGrid>
 		</section>
