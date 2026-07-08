@@ -66,8 +66,14 @@ npm run build
 ```
 
 Production images are built for `linux/amd64` and `linux/arm64` and published
-to `ghcr.io/kwiniarski97/track` on every push to `main` (see
-`.github/workflows`).
+to `ghcr.io/kwiniarski97/track`, tagged with the semantic version (plus
+`latest`), whenever a release is cut (see `.github/workflows/release.yml`).
+
+Releases are managed by [release-please](https://github.com/googleapis/release-please):
+commits to `main` should use [Conventional Commits](https://www.conventionalcommits.org/)
+(`feat:`, `fix:`, `chore:`, ...) so it can determine the version bump. It opens/updates
+a release PR with the version bump and changelog; merging it cuts the GitHub release,
+tag, and Docker image.
 
 To run with Docker Compose, using the pre-built image:
 
