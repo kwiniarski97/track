@@ -196,11 +196,70 @@ describe('home page load', () => {
 		expect(result.notWatchedForAWhile.map((w) => w.tmdbId)).toEqual([STALE_UNWATCHED_ID]);
 		expect(result.notStarted.map((w) => w.tmdbId)).toEqual([NOT_STARTED_ID]);
 
-		// Other fixtures above also log old watches (so their shows count as "started"),
-		// so only assert the most-recent two are ordered correctly, not the full list.
-		expect(result.recentlyWatched.slice(0, 2).map((r) => r.tmdbId)).toEqual([
+		// Other fixtures above also log a watch, but 300 days ago -- past the recently-
+		// watched cutoff, so only these two (logged minutes/hours ago) should show up.
+		expect(result.recentlyWatched.map((r) => r.tmdbId)).toEqual([
 			RECENTLY_WATCHED_ID,
 			RECENT_EPISODE_WATCHED_ID
 		]);
+	});
+});
+
+describe('home page load recently watched cutoff', () => {
+	let userId: string;
+	const WITHIN_CUTOFF_ID = 999301;
+	const PAST_CUTOFF_ID = 999302;
+
+	beforeEach(async () => {
+		const [user] = await db
+			.insert(users)
+			.values({
+				pocketIdSub: crypto.randomUUID(),
+				email: 'cutoff-test@example.com',
+				name: 'Cutoff Test'
+			})
+			.returning();
+		userId = user.id;
+
+		await db
+			.insert(shows)
+			.values([
+				{ tmdbId: WITHIN_CUTOFF_ID, title: 'Watched 89 Days Ago' },
+				{ tmdbId: PAST_CUTOFF_ID, title: 'Watched 91 Days Ago' }
+			])
+			.onConflictDoNothing();
+
+		await db.insert(userWatches).values([
+			{
+				userId,
+				mediaType: 'tv',
+				tmdbId: WITHIN_CUTOFF_ID,
+				seasonNumber: 1,
+				episodeNumber: 1,
+				watchedAt: new Date(Date.now() - 89 * 24 * 60 * 60 * 1000)
+			},
+			{
+				userId,
+				mediaType: 'tv',
+				tmdbId: PAST_CUTOFF_ID,
+				seasonNumber: 1,
+				episodeNumber: 1,
+				watchedAt: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000)
+			}
+		]);
+	});
+
+	afterEach(async () => {
+		await db.delete(userWatches).where(eq(userWatches.userId, userId));
+		await db.delete(users).where(eq(users.id, userId));
+	});
+
+	it('drops shows last watched more than 90 days ago from recently watched', async () => {
+		const result = (await load({
+			locals: { user: { id: userId } }
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		} as any)) as { recentlyWatched: TrackedItem[] };
+
+		expect(result.recentlyWatched.map((r) => r.tmdbId)).toEqual([WITHIN_CUTOFF_ID]);
 	});
 });

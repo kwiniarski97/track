@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	episodes,
@@ -21,6 +21,9 @@ export interface TrackedItem {
 
 const SECTION_STATUSES: TrackingStatus[] = ['watching', 'plan_to_watch'];
 const RECENTLY_WATCHED_LIMIT = 6;
+// A show whose last watched episode is older than this drops out of Recently Watched
+// entirely, rather than lingering there indefinitely.
+const RECENTLY_WATCHED_MAX_AGE_DAYS = 90;
 // How recently an unwatched episode must have aired for a show to land in Watch Next
 // rather than Watching -- the show is otherwise fully caught up, just waiting on the
 // latest episode(s).
@@ -33,6 +36,13 @@ type WatchingCategory = 'watch_next' | 'watching' | 'not_watched_for_a_while' | 
 
 function daysAgoIso(n: number): string {
 	return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// Seconds-since-epoch to match how the `timestamp` column mode stores `watchedAt`, since
+// the aggregate below is a raw `sql` expression and isn't run back through Drizzle's
+// Date mapping.
+function daysAgoEpochSeconds(n: number): number {
+	return Math.floor((Date.now() - n * 24 * 60 * 60 * 1000) / 1000);
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -156,6 +166,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.from(userWatches)
 		.where(and(eq(userWatches.userId, userId), eq(userWatches.mediaType, 'tv')))
 		.groupBy(userWatches.tmdbId)
+		.having(({ lastWatchedAt }) =>
+			gte(lastWatchedAt, daysAgoEpochSeconds(RECENTLY_WATCHED_MAX_AGE_DAYS))
+		)
 		.orderBy(desc(sql`max(${userWatches.watchedAt})`))
 		.limit(RECENTLY_WATCHED_LIMIT);
 
