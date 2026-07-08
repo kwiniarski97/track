@@ -94,9 +94,33 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		myShowTracking.map((t) => ({ tmdbId: t.tmdbId, trackingStatus: t.status }))
 	);
 
-	function showsWithStatus(status: TrackingStatus): CompletedItem[] {
+	// Shows tracked as 'watching' with no logged watch (any season/episode, including
+	// specials) haven't actually been started -- mirrors the home page's "Na później"
+	// bucket so a show shows up there consistently in both places.
+	const watchingShowIds = myShowTracking
+		.filter((t) => t.status === 'watching')
+		.map((t) => t.tmdbId);
+	const startedShowIds = new Set<number>();
+	if (watchingShowIds.length) {
+		const startedRows = await db
+			.selectDistinct({ tmdbId: userWatches.tmdbId })
+			.from(userWatches)
+			.where(
+				and(
+					eq(userWatches.userId, userId),
+					eq(userWatches.mediaType, 'tv'),
+					inArray(userWatches.tmdbId, watchingShowIds)
+				)
+			);
+		for (const r of startedRows) startedShowIds.add(r.tmdbId);
+	}
+
+	function showsWithStatus(
+		status: TrackingStatus,
+		filter?: (tmdbId: number) => boolean
+	): CompletedItem[] {
 		const sortable = myShowTracking
-			.filter((t) => t.status === status)
+			.filter((t) => t.status === status && (!filter || filter(t.tmdbId)))
 			.map((t): SortableItem<CompletedItem> | null => {
 				const show = showById.get(t.tmdbId);
 				return show
@@ -118,7 +142,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		return sortProfileItems(sortable, sort);
 	}
 
-	const watchingShows = showsWithStatus('watching');
+	const notStartedShows = showsWithStatus('watching', (tmdbId) => !startedShowIds.has(tmdbId));
+	const watchingShows = showsWithStatus('watching', (tmdbId) => startedShowIds.has(tmdbId));
 	const completedShows = showsWithStatus('completed');
 	const droppedShows = showsWithStatus('dropped');
 
@@ -146,6 +171,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		},
 		sort,
 		watchingShows,
+		notStartedShows,
 		completedShows,
 		droppedShows,
 		completedMovies

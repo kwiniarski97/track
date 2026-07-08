@@ -39,6 +39,7 @@
 		data.stats.episodesWatched === 0 &&
 			data.stats.moviesWatched === 0 &&
 			data.watchingShows.length === 0 &&
+			data.notStartedShows.length === 0 &&
 			data.completedShows.length === 0 &&
 			data.droppedShows.length === 0 &&
 			data.completedMovies.length === 0
@@ -83,6 +84,23 @@
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_watching_heading()}</h2>
 			<PosterGrid>
 				{#each data.watchingShows as item, i (item.mediaType + item.tmdbId)}
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						progress={item.progress}
+						index={i}
+					/>
+				{/each}
+			</PosterGrid>
+		</section>
+	{/if}
+
+	{#if data.notStartedShows.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-3 text-lg font-semibold text-text">{m.profile_not_started_heading()}</h2>
+			<PosterGrid>
+				{#each data.notStartedShows as item, i (item.mediaType + item.tmdbId)}
 					<PosterCard
 						href={hrefFor(item)}
 						title={item.title}
