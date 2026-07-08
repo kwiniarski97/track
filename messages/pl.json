@@ -48,6 +48,7 @@
 	"back_to_home": "← Strona główna",
 	"back": "Wstecz",
 	"show_status_label": "Status: {status}",
+	"audience_score_label": "Ocena widzów",
 	"in_jellyfin_library": "W Twojej bibliotece Jellyfin",
 	"track_this_show": "Śledź ten serial",
 	"track_this_movie": "Śledź ten film",

@@ -48,6 +48,7 @@
 	"back_to_home": "← Home",
 	"back": "Back",
 	"show_status_label": "Status: {status}",
+	"audience_score_label": "Audience score",
 	"in_jellyfin_library": "In your Jellyfin library",
 	"track_this_show": "Track this show",
 	"track_this_movie": "Track this movie",

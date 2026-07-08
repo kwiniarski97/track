@@ -46,7 +46,9 @@ type TmdbRawSearchResult = {
 
 const TMDB_MAX_PAGE = 500;
 
-function mapSearchResult(r: TmdbRawSearchResult & { media_type: 'tv' | 'movie' }): TmdbSearchResult {
+function mapSearchResult(
+	r: TmdbRawSearchResult & { media_type: 'tv' | 'movie' }
+): TmdbSearchResult {
 	return r.media_type === 'tv'
 		? {
 				mediaType: 'tv' as const,
@@ -179,6 +181,8 @@ export type TmdbShowDetails = {
 		episode_count: number;
 		air_date: string | null;
 	}>;
+	vote_average: number;
+	vote_count: number;
 };
 
 export function getShowDetails(tmdbId: number): Promise<TmdbShowDetails> {
@@ -206,6 +210,8 @@ export type TmdbMovieDetails = {
 	backdrop_path: string | null;
 	release_date: string | null;
 	runtime: number | null;
+	vote_average: number;
+	vote_count: number;
 };
 
 export function getMovieDetails(tmdbId: number): Promise<TmdbMovieDetails> {

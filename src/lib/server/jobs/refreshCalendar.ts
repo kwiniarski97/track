@@ -44,7 +44,11 @@ async function refreshCalendarCacheForUser(userId: string): Promise<void> {
 				.select()
 				.from(movies)
 				.where(
-					and(inArray(movies.tmdbId, movieIds), isNotNull(movies.releaseDate), gte(movies.releaseDate, today))
+					and(
+						inArray(movies.tmdbId, movieIds),
+						isNotNull(movies.releaseDate),
+						gte(movies.releaseDate, today)
+					)
 				)
 		: [];
 

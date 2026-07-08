@@ -10,6 +10,7 @@
 	import SeasonTabs from '$lib/components/SeasonTabs.svelte';
 	import EpisodeRow from '$lib/components/EpisodeRow.svelte';
 	import IconCheck from '$lib/components/icons/IconCheck.svelte';
+	import AudienceScoreBadge from '$lib/components/AudienceScoreBadge.svelte';
 
 	let { data } = $props();
 
@@ -172,6 +173,7 @@
 					{m.in_jellyfin_library()}
 				</span>
 			{/if}
+			<AudienceScoreBadge voteAverage={data.show.vote_average} voteCount={data.show.vote_count} />
 		</div>
 	{/snippet}
 

@@ -6,6 +6,7 @@
 	import { queueWatch } from '$lib/client/outbox';
 	import DetailHero from '$lib/components/DetailHero.svelte';
 	import TrackButton from '$lib/components/TrackButton.svelte';
+	import AudienceScoreBadge from '$lib/components/AudienceScoreBadge.svelte';
 	import IconCheck from '$lib/components/icons/IconCheck.svelte';
 
 	let { data } = $props();
@@ -47,6 +48,7 @@
 					{m.in_jellyfin_library()}
 				</span>
 			{/if}
+			<AudienceScoreBadge voteAverage={data.movie.vote_average} voteCount={data.movie.vote_count} />
 			<button
 				type="button"
 				onclick={() => toggleWatched(!isWatched)}

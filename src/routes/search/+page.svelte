@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
+	import type { ResolvedPathname } from '$app/types';
 	import { m } from '$lib/paraglide/messages';
 	import PosterGrid from '$lib/components/PosterGrid.svelte';
 	import PosterCard from '$lib/components/PosterCard.svelte';
@@ -9,15 +11,15 @@
 
 	let { data } = $props();
 
-	function pageHref(pageNum: number): string {
-		const params = new URLSearchParams();
+	function pageHref(pageNum: number): ResolvedPathname {
+		const params = new SvelteURLSearchParams();
 		if (data.query) params.set('q', data.query);
 		if (data.type !== 'tv') params.set('type', data.type);
 		if (data.year) params.set('year', String(data.year));
 		if (data.sort !== 'relevance') params.set('sort', data.sort);
 		if (pageNum > 1) params.set('page', String(pageNum));
 		const qs = params.toString();
-		return qs ? `${resolve('/search')}?${qs}` : resolve('/search');
+		return qs ? resolve(`/search?${qs}`) : resolve('/search');
 	}
 
 	function pageNumbers(current: number, total: number): Array<number | 'ellipsis'> {

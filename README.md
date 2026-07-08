@@ -33,15 +33,15 @@ cp .env.example .env
 
 Fill in `.env`:
 
-| Variable | Notes |
-| --- | --- |
-| `DATABASE_URL` | path to the SQLite file, e.g. `local.db` |
-| `ORIGIN` | public origin required by SvelteKit's adapter-node; must be the real HTTPS origin in production |
-| `BODY_SIZE_LIMIT` | default `20M`; the 512K default is too small for a TV Time export zip upload |
-| `SESSION_SECRET` | random secret used to sign session cookies |
-| `TMDB_API_KEY` | from https://www.themoviedb.org/settings/api |
-| `POCKET_ID_ISSUER`, `POCKET_ID_CLIENT_ID`, `POCKET_ID_CLIENT_SECRET` | from an OIDC client created in your Pocket ID instance |
-| `JELLYFIN_URL`, `JELLYFIN_API_KEY` | optional, enables Jellyfin watch-status sync |
+| Variable                                                             | Notes                                                                                           |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                       | path to the SQLite file, e.g. `local.db`                                                        |
+| `ORIGIN`                                                             | public origin required by SvelteKit's adapter-node; must be the real HTTPS origin in production |
+| `BODY_SIZE_LIMIT`                                                    | default `20M`; the 512K default is too small for a TV Time export zip upload                    |
+| `SESSION_SECRET`                                                     | random secret used to sign session cookies                                                      |
+| `TMDB_API_KEY`                                                       | from https://www.themoviedb.org/settings/api                                                    |
+| `POCKET_ID_ISSUER`, `POCKET_ID_CLIENT_ID`, `POCKET_ID_CLIENT_SECRET` | from an OIDC client created in your Pocket ID instance                                          |
+| `JELLYFIN_URL`, `JELLYFIN_API_KEY`                                   | optional, enables Jellyfin watch-status sync                                                    |
 
 Push the schema and start the dev server:
 
