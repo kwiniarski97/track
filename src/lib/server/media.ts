@@ -15,12 +15,27 @@ import {
 	type TmdbMovieDetails,
 	type TmdbShowDetails
 } from './tmdb';
+import { extractPosterColor } from './poster-color';
 
 async function upsertShow(details: TmdbShowDetails): Promise<void> {
+	const [existing] = await db
+		.select({ posterPath: shows.posterPath, posterColor: shows.posterColor })
+		.from(shows)
+		.where(eq(shows.tmdbId, details.id));
+
+	// Only re-derive the color when the poster actually changed (or we've never
+	// computed one) -- it costs a network fetch + image decode, so skip it on the
+	// common case of re-caching a show whose poster hasn't moved.
+	const posterColor =
+		existing && existing.posterPath === details.poster_path && existing.posterColor
+			? existing.posterColor
+			: await extractPosterColor(details.poster_path);
+
 	const values = {
 		tmdbId: details.id,
 		title: details.name,
 		posterPath: details.poster_path,
+		posterColor,
 		overview: details.overview,
 		firstAirDate: details.first_air_date,
 		status: details.status,

@@ -47,6 +47,9 @@ export const shows = sqliteTable('shows', {
 	tmdbId: integer('tmdb_id').primaryKey(),
 	title: text('title').notNull(),
 	posterPath: text('poster_path'),
+	// Hex accent color extracted from the poster, used to retint the app's brand accent
+	// while its show page is open -- see extractPosterColor in poster-color.ts.
+	posterColor: text('poster_color'),
 	overview: text('overview'),
 	firstAirDate: text('first_air_date'),
 	status: text('status'),

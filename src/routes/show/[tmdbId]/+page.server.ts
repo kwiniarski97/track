@@ -1,6 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { episodes, jellyfinLibraryItems, userTracking, userWatches } from '$lib/server/db/schema';
+import {
+	episodes,
+	jellyfinLibraryItems,
+	shows,
+	userTracking,
+	userWatches
+} from '$lib/server/db/schema';
 import { cacheShowSeasons, refreshShow, syncShowCompletion } from '$lib/server/media';
 import { getSeasonDetails, type TmdbShowDetails } from '$lib/server/tmdb';
 import type { Actions, PageServerLoad } from './$types';
@@ -128,6 +134,11 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		.from(jellyfinLibraryItems)
 		.where(and(eq(jellyfinLibraryItems.mediaType, 'tv'), eq(jellyfinLibraryItems.tmdbId, tmdbId)));
 
+	const [showRow] = await db
+		.select({ posterColor: shows.posterColor })
+		.from(shows)
+		.where(eq(shows.tmdbId, tmdbId));
+
 	return {
 		show: details,
 		seasons: seasonsWithEpisodes,
@@ -135,7 +146,8 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		episodesBySeason,
 		watchedEpisodeNumbersBySeason,
 		trackingStatus: tracking?.status ?? null,
-		inJellyfinLibrary: !!libraryEntry
+		inJellyfinLibrary: !!libraryEntry,
+		posterColor: showRow?.posterColor ?? null
 	};
 };
 

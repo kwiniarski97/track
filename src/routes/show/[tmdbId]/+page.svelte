@@ -6,6 +6,7 @@
 	import { showStatusLabel, trackingStatusLabel } from '$lib/labels';
 	import { getPendingWatchOverride } from '$lib/client/db';
 	import { queueWatch } from '$lib/client/outbox';
+	import { applyAccentTheme } from '$lib/client/accent-theme';
 	import DetailHero from '$lib/components/DetailHero.svelte';
 	import TrackButton from '$lib/components/TrackButton.svelte';
 	import SeasonTabs from '$lib/components/SeasonTabs.svelte';
@@ -95,6 +96,12 @@
 
 	onMount(() => {
 		document.getElementById(`season-${data.selectedSeason}`)?.scrollIntoView({ block: 'start' });
+	});
+
+	// Retints the whole app's brand accent (buttons, checkmarks, nav bar) to match this
+	// show's poster for as long as the page is open, reverting on navigation away.
+	$effect(() => {
+		return applyAccentTheme(data.posterColor);
 	});
 
 	function isWatched(seasonNumber: number, episodeNumber: number): boolean {
