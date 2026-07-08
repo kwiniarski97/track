@@ -70,3 +70,44 @@ export function checkPop(node: HTMLElement): void {
 		{ scale: 1, opacity: 1, duration: 0.3, ease: 'back.out(2.5)' }
 	);
 }
+
+const CONFETTI_COLORS = ['#ff858d', '#ffaeb4', '#f2634a', '#fbbf24'];
+
+/** Scatters a handful of accent-colored flecks out of `node`, e.g. from a check circle
+ * when marking an episode watched. `node` must be positioned (relative/absolute) so the
+ * particles anchor to it. */
+export function confettiBurst(node: HTMLElement): void {
+	if (reducedMotion()) return;
+
+	const count = 8;
+	for (let i = 0; i < count; i++) {
+		const piece = document.createElement('span');
+		piece.style.position = 'absolute';
+		piece.style.left = '50%';
+		piece.style.top = '50%';
+		piece.style.width = '5px';
+		piece.style.height = '5px';
+		piece.style.borderRadius = '1px';
+		piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+		piece.style.pointerEvents = 'none';
+		node.appendChild(piece);
+
+		const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
+		const dist = 18 + Math.random() * 10;
+		gsap.set(piece, { xPercent: -50, yPercent: -50 });
+		gsap.fromTo(
+			piece,
+			{ x: 0, y: 0, opacity: 1, scale: 1, rotation: 0 },
+			{
+				x: Math.cos(angle) * dist,
+				y: Math.sin(angle) * dist,
+				opacity: 0,
+				scale: 0.4,
+				rotation: Math.random() * 240 - 120,
+				duration: 0.6,
+				ease: 'power2.out',
+				onComplete: () => piece.remove()
+			}
+		);
+	}
+}

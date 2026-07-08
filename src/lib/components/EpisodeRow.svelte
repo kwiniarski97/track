@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { checkPop } from '$lib/motion';
+	import { checkPop, confettiBurst } from '$lib/motion';
 	import { m } from '$lib/paraglide/messages';
 	import { tmdbStillUrl } from '$lib/tmdb-client';
 	import IconCheck from './icons/IconCheck.svelte';
@@ -31,9 +31,11 @@
 	} = $props();
 
 	let checkEl = $state<HTMLElement>();
+	let circleEl = $state<HTMLElement>();
 
 	$effect(() => {
 		if (watched && checkEl) checkPop(checkEl);
+		if (watched && circleEl) confettiBurst(circleEl);
 	});
 
 	const still = $derived(tmdbStillUrl(stillPath));
@@ -74,7 +76,8 @@
 		{/if}
 	</span>
 	<span
-		class="flex h-6 w-6 flex-none items-center justify-center rounded-full border transition-colors {watched
+		bind:this={circleEl}
+		class="relative flex h-6 w-6 flex-none items-center justify-center rounded-full border transition-colors {watched
 			? 'bg-gradient-accent border-accent text-accent-fg shadow-glow'
 			: 'border-border-strong text-transparent'}"
 	>
