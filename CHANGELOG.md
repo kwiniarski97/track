@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/kwiniarski97/track/compare/v1.0.0...v1.0.1) (2026-07-08)
+
+
+### Bug Fixes
+
+* add PNG icon sizes required for Android PWA install ([4de2601](https://github.com/kwiniarski97/track/commit/4de260192847e91b257305011d599b84e3c1dfda))
+
 ## 1.0.0 (2026-07-08)
 
 
