@@ -42,8 +42,8 @@
 
 <h1 class="mb-5 text-2xl font-bold tracking-tight text-text sm:text-3xl">{m.search_title()}</h1>
 
-<form method="GET" class="mb-8 flex flex-wrap gap-2">
-	<div class="relative min-w-0 flex-1">
+<form method="GET" class="mb-8 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+	<div class="relative min-w-0 sm:flex-1">
 		<span class="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-text-faint">
 			<IconSearch size={18} />
 		</span>
@@ -55,46 +55,50 @@
 			class="w-full rounded-pill border border-border bg-surface py-3 pr-4 pl-10 text-sm text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
 		/>
 	</div>
-	<select
-		name="type"
-		value={data.type}
-		onchange={(e) => e.currentTarget.form?.requestSubmit()}
-		aria-label={m.search_type_label()}
-		class="rounded-pill border border-border bg-surface px-4 py-3 text-sm text-text focus:border-accent focus:outline-none"
-	>
-		<option value="tv">{m.search_type_tv()}</option>
-		<option value="movie">{m.search_type_movie()}</option>
-	</select>
-	<input
-		type="number"
-		name="year"
-		inputmode="numeric"
-		value={data.year ?? ''}
-		placeholder={m.search_year_placeholder()}
-		aria-label={m.search_year_placeholder()}
-		min="1900"
-		max={new Date().getFullYear() + 5}
-		class="w-24 rounded-pill border border-border bg-surface px-4 py-3 text-sm text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
-	/>
-	<select
-		name="sort"
-		value={data.sort}
-		onchange={(e) => e.currentTarget.form?.requestSubmit()}
-		aria-label={m.search_sort_label()}
-		class="rounded-pill border border-border bg-surface px-4 py-3 text-sm text-text focus:border-accent focus:outline-none"
-	>
-		<option value="relevance">{m.search_sort_relevance()}</option>
-		<option value="popularity">{m.search_sort_popularity()}</option>
-		<option value="rating">{m.search_sort_rating()}</option>
-		<option value="newest">{m.search_sort_newest()}</option>
-		<option value="title">{m.search_sort_title()}</option>
-	</select>
-	<button
-		type="submit"
-		class="sheen bg-gradient-accent rounded-pill px-5 py-3 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.03]"
-	>
-		{m.search_button()}
-	</button>
+	<div class="flex gap-2">
+		<select
+			name="type"
+			value={data.type}
+			onchange={(e) => e.currentTarget.form?.requestSubmit()}
+			aria-label={m.search_type_label()}
+			class="flex-1 rounded-pill border border-border bg-surface px-4 py-3 text-sm text-text focus:border-accent focus:outline-none sm:flex-none"
+		>
+			<option value="tv">{m.search_type_tv()}</option>
+			<option value="movie">{m.search_type_movie()}</option>
+		</select>
+		<input
+			type="number"
+			name="year"
+			inputmode="numeric"
+			value={data.year ?? ''}
+			placeholder={m.search_year_placeholder()}
+			aria-label={m.search_year_placeholder()}
+			min="1900"
+			max={new Date().getFullYear() + 5}
+			class="w-24 rounded-pill border border-border bg-surface px-4 py-3 text-sm text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
+		/>
+	</div>
+	<div class="flex gap-2">
+		<select
+			name="sort"
+			value={data.sort}
+			onchange={(e) => e.currentTarget.form?.requestSubmit()}
+			aria-label={m.search_sort_label()}
+			class="flex-1 rounded-pill border border-border bg-surface px-4 py-3 text-sm text-text focus:border-accent focus:outline-none sm:flex-none"
+		>
+			<option value="relevance">{m.search_sort_relevance()}</option>
+			<option value="popularity">{m.search_sort_popularity()}</option>
+			<option value="rating">{m.search_sort_rating()}</option>
+			<option value="newest">{m.search_sort_newest()}</option>
+			<option value="title">{m.search_sort_title()}</option>
+		</select>
+		<button
+			type="submit"
+			class="sheen bg-gradient-accent rounded-pill px-5 py-3 text-sm font-semibold text-accent-fg shadow-glow transition-transform hover:scale-[1.03]"
+		>
+			{m.search_button()}
+		</button>
+	</div>
 </form>
 
 {#if data.query.length === 0}
