@@ -66,6 +66,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.map((t) => t.tmdbId);
 
 	const categoryByShowId = new Map<number, WatchingCategory>();
+	// Shows with at least one logged watch (any season/episode, including specials) --
+	// everything else tracked as 'watching' hasn't actually been started yet.
+	const startedShowIds = new Set<number>();
 	if (watchingShowIds.length) {
 		const today = daysAgoIso(0);
 		const newEpisodeWindowStart = daysAgoIso(NEW_EPISODE_WINDOW_DAYS);
@@ -108,6 +111,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const watchedSet = new Set(
 			watchesForWatchingShows.map((w) => watchedKey(w.tmdbId, w.seasonNumber, w.episodeNumber))
 		);
+		for (const w of watchesForWatchingShows) startedShowIds.add(w.tmdbId);
 
 		const airedByShowId = new Map<number, typeof airedEpisodeRows>();
 		for (const ep of airedEpisodeRows) {
@@ -224,6 +228,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// Movies don't have episodes to reason about, so they always land in the general
 	// Watching bucket alongside shows whose progress doesn't fit a more specific one.
+	const notStarted: TrackedItem[] = [];
 	const watchNext: TrackedItem[] = [];
 	const watching: TrackedItem[] = [];
 	const notWatchedForAWhile: TrackedItem[] = [];
@@ -232,6 +237,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 	for (const t of tracking.filter((t) => t.status === 'watching')) {
 		const item = toItem(t);
 		if (!item) continue;
+		if (t.mediaType === 'tv' && !startedShowIds.has(t.tmdbId)) {
+			notStarted.push(item);
+			continue;
+		}
 		const category: WatchingCategory =
 			t.mediaType === 'tv' ? (categoryByShowId.get(t.tmdbId) ?? 'watching') : 'watching';
 		switch (category) {
@@ -255,6 +264,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		watching,
 		notWatchedForAWhile,
 		upToDate,
+		notStarted,
 		planToWatch: tracking
 			.filter((t) => t.status === 'plan_to_watch')
 			.map(toItem)

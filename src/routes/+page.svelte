@@ -22,6 +22,7 @@
 			data.watching.length === 0 &&
 			data.notWatchedForAWhile.length === 0 &&
 			data.upToDate.length === 0 &&
+			data.notStarted.length === 0 &&
 			data.planToWatch.length === 0 &&
 			data.recentlyWatched.length === 0
 	);
@@ -33,6 +34,7 @@
 			...data.watching,
 			...data.notWatchedForAWhile,
 			...data.upToDate,
+			...data.notStarted,
 			...data.planToWatch
 		]
 			.map((item) => tmdbPosterUrl(item.posterPath, 'w342'))
@@ -161,6 +163,23 @@
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_up_to_date_heading()}</h2>
 			<PosterGrid>
 				{#each data.upToDate as item, i (item.mediaType + item.tmdbId)}
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						progress={item.progress}
+						index={i}
+					/>
+				{/each}
+			</PosterGrid>
+		</section>
+	{/if}
+
+	{#if data.notStarted.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_not_started_heading()}</h2>
+			<PosterGrid>
+				{#each data.notStarted as item, i (item.mediaType + item.tmdbId)}
 					<PosterCard
 						href={hrefFor(item)}
 						title={item.title}
