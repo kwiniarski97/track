@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { episodes, jellyfinLibraryItems, userTracking, userWatches } from '$lib/server/db/schema';
-import { cacheShowSeasons, refreshShow } from '$lib/server/media';
+import { cacheShowSeasons, refreshShow, syncShowCompletion } from '$lib/server/media';
 import { getSeasonDetails, type TmdbShowDetails } from '$lib/server/tmdb';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -64,6 +64,11 @@ async function ensureAllSeasonsEpisodesCached(
 export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const tmdbId = Number(params.tmdbId);
 	const details = await ensureShowCached(tmdbId);
+
+	// Reconcile completion now that we've just refreshed the show's TMDB status --
+	// catches a show that was marked completed and later got renewed (status flips back
+	// off Ended/Canceled), which nothing else re-checks until the show is opened again.
+	await syncShowCompletion(locals.user!.id, tmdbId);
 
 	// Show newest season first, oldest last -- but "Specials" (season 0) always last.
 	const seasonsWithEpisodes = details.seasons

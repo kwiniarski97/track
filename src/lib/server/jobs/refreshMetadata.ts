@@ -22,13 +22,22 @@ async function getActivelyTrackedTmdbIds(
 	return rows.map((r) => r.tmdbId);
 }
 
-/** Every (user, show) pair currently marked 'watching' -- the set syncShowCompletion
- * needs to check, since a show can flip to Ended on TMDB long after the user already
- * caught up, with no watch event left to trigger the check. */
-async function getWatchingShowTracking(
+// Both directions need periodic re-checking: a 'watching' show can flip to Ended on
+// TMDB long after the user already caught up, and a 'completed' show can get renewed
+// (status flips back off Ended/Canceled) long after it was marked done -- either way,
+// with no watch event left to trigger syncShowCompletion, it would otherwise stay wrong
+// forever.
+const COMPLETION_CHECK_STATUSES = ['watching', 'completed'] as const;
+
+/** Every (user, show) pair currently marked 'watching' or 'completed' -- the set
+ * syncShowCompletion needs to re-check on each run. */
+async function getCompletionCheckTracking(
 	userId?: string
 ): Promise<{ userId: string; tmdbId: number }[]> {
-	const conditions = [eq(userTracking.mediaType, 'tv'), eq(userTracking.status, 'watching')];
+	const conditions = [
+		eq(userTracking.mediaType, 'tv'),
+		inArray(userTracking.status, COMPLETION_CHECK_STATUSES)
+	];
 	if (userId) conditions.push(eq(userTracking.userId, userId));
 
 	return db
@@ -38,19 +47,20 @@ async function getWatchingShowTracking(
 }
 
 /** Refreshes cached TMDB metadata (including next-episode-air-date) for every actively
- * tracked show/movie -- everyone's if `userId` is omitted (the scheduled job), or just
- * one user's (an on-demand refresh, e.g. before rendering their calendar). Failures for
- * one title don't stop the rest -- TMDB being briefly unreachable for one id shouldn't
- * blank out the whole calendar. Also re-syncs completion for every 'watching' show after
- * refreshing: a show can end on TMDB well after a user already watched every episode, and
- * without this pass that show would stay 'watching' forever since nothing else would ever
- * re-check it. */
+ * tracked show/movie, plus every completed show (so a renewal shows up), then re-syncs
+ * completion for the watching/completed set -- everyone's if `userId` is omitted (the
+ * scheduled job), or just one user's (an on-demand refresh, e.g. before rendering their
+ * calendar). Failures for one title don't stop the rest -- TMDB being briefly
+ * unreachable for one id shouldn't blank out the whole calendar. */
 export async function refreshTrackedMetadata(userId?: string): Promise<void> {
-	const [showIds, movieIds, watchingShows] = await Promise.all([
+	const [activeShowIds, movieIds, completionCheckTracking] = await Promise.all([
 		getActivelyTrackedTmdbIds('tv', userId),
 		getActivelyTrackedTmdbIds('movie', userId),
-		getWatchingShowTracking(userId)
+		getCompletionCheckTracking(userId)
 	]);
+
+	const showIds = new Set(activeShowIds);
+	for (const { tmdbId } of completionCheckTracking) showIds.add(tmdbId);
 
 	for (const tmdbId of showIds) {
 		try {
@@ -69,7 +79,7 @@ export async function refreshTrackedMetadata(userId?: string): Promise<void> {
 		}
 	}
 
-	for (const { userId: trackingUserId, tmdbId } of watchingShows) {
+	for (const { userId: trackingUserId, tmdbId } of completionCheckTracking) {
 		try {
 			await syncShowCompletion(trackingUserId, tmdbId);
 		} catch (error) {
