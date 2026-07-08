@@ -12,6 +12,7 @@
 		watched = false,
 		badge = null,
 		progress = null,
+		grayscale = false,
 		index = 0
 	}: {
 		href: ResolvedPathname;
@@ -25,6 +26,9 @@
 			total: number;
 			state: 'completed' | 'up_to_date' | 'behind';
 		} | null;
+		// Desaturates the poster, e.g. to mark a dropped/abandoned show -- fades back to
+		// color on hover so it's still recognizable without fully hiding it.
+		grayscale?: boolean;
 		index?: number;
 	} = $props();
 
@@ -50,7 +54,9 @@
 				src={poster}
 				alt=""
 				loading="lazy"
-				class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+				class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 {grayscale
+					? 'grayscale-[85%] transition-[filter] duration-300 group-hover:grayscale-0'
+					: ''}"
 			/>
 		{:else}
 			<div

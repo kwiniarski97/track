@@ -122,6 +122,7 @@
 						title={item.title}
 						posterPath={item.posterPath}
 						progress={item.progress}
+						grayscale
 						index={i}
 					/>
 				{/each}
