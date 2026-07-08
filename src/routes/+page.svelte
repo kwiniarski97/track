@@ -18,12 +18,23 @@
 	}
 
 	const isEmpty = $derived(
-		data.watching.length === 0 && data.planToWatch.length === 0 && data.recentlyWatched.length === 0
+		data.watchNext.length === 0 &&
+			data.watching.length === 0 &&
+			data.notWatchedForAWhile.length === 0 &&
+			data.upToDate.length === 0 &&
+			data.planToWatch.length === 0 &&
+			data.recentlyWatched.length === 0
 	);
 	// A blurred backdrop of the user's own posters, most-recently-tracked first --
 	// gives the dashboard a personal, cinematic feel instead of a flat header.
 	const heroPosters = $derived(
-		[...data.watching, ...data.planToWatch]
+		[
+			...data.watchNext,
+			...data.watching,
+			...data.notWatchedForAWhile,
+			...data.upToDate,
+			...data.planToWatch
+		]
 			.map((item) => tmdbPosterUrl(item.posterPath, 'w342'))
 			.filter((url) => url !== null)
 			.slice(0, 10)
@@ -90,6 +101,23 @@
 		</section>
 	{/if}
 
+	{#if data.watchNext.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_watch_next_heading()}</h2>
+			<PosterGrid>
+				{#each data.watchNext as item, i (item.mediaType + item.tmdbId)}
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						badge={m.home_new_episode_badge()}
+						index={i}
+					/>
+				{/each}
+			</PosterGrid>
+		</section>
+	{/if}
+
 	{#if data.watching.length > 0}
 		<section class="mb-10">
 			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_watching_heading()}</h2>
@@ -99,7 +127,40 @@
 						href={hrefFor(item)}
 						title={item.title}
 						posterPath={item.posterPath}
-						badge={item.hasNewEpisode ? m.home_new_episode_badge() : null}
+						index={i}
+					/>
+				{/each}
+			</PosterGrid>
+		</section>
+	{/if}
+
+	{#if data.notWatchedForAWhile.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-3 text-lg font-semibold text-text">
+				{m.home_not_watched_for_a_while_heading()}
+			</h2>
+			<PosterGrid>
+				{#each data.notWatchedForAWhile as item, i (item.mediaType + item.tmdbId)}
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
+						index={i}
+					/>
+				{/each}
+			</PosterGrid>
+		</section>
+	{/if}
+
+	{#if data.upToDate.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_up_to_date_heading()}</h2>
+			<PosterGrid>
+				{#each data.upToDate as item, i (item.mediaType + item.tmdbId)}
+					<PosterCard
+						href={hrefFor(item)}
+						title={item.title}
+						posterPath={item.posterPath}
 						index={i}
 					/>
 				{/each}

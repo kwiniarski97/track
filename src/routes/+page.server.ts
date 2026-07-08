@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	episodes,
@@ -15,14 +15,23 @@ export interface TrackedItem {
 	tmdbId: number;
 	title: string;
 	posterPath: string | null;
-	hasNewEpisode?: boolean;
 }
 
 const SECTION_STATUSES: TrackingStatus[] = ['watching', 'plan_to_watch'];
 const RECENTLY_WATCHED_LIMIT = 6;
-// How far back an episode's air date can be and still count as "new" for the
-// Watching section's badge/sort-to-front treatment.
+// How recently an unwatched episode must have aired for a show to land in Watch Next
+// rather than Watching -- the show is otherwise fully caught up, just waiting on the
+// latest episode(s).
 const NEW_EPISODE_WINDOW_DAYS = 30;
+// How old the oldest unwatched episode must be before a show is considered stale
+// (Not watched for a while) instead of just currently behind (Watching).
+const STALE_UNWATCHED_DAYS = 180;
+
+type WatchingCategory = 'watch_next' | 'watching' | 'not_watched_for_a_while' | 'up_to_date';
+
+function daysAgoIso(n: number): string {
+	return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const userId = locals.user!.id;
@@ -46,33 +55,33 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const showById = new Map(showRows.map((s) => [s.tmdbId, s]));
 	const movieById = new Map(movieRows.map((mv) => [mv.tmdbId, mv]));
 
-	// Shows in the Watching section that have an episode which aired in the last
-	// NEW_EPISODE_WINDOW_DAYS and hasn't been logged as watched yet -- these get the
-	// "new episode" badge and float to the top of the section. Relies on the `episodes`
-	// cache, which is only populated once someone has opened the show page, so a
-	// recently-aired episode for a show that hasn't been visited won't be caught here.
+	// Bucket each 'watching' show by progress against what's aired so far. Relies on the
+	// `episodes` cache, which is only populated once someone has opened the show page --
+	// a show that's never been visited has no cached episodes, so it falls back to
+	// "up to date" rather than blocking on data we don't have.
 	const watchingShowIds = tracking
 		.filter((t) => t.mediaType === 'tv' && t.status === 'watching')
 		.map((t) => t.tmdbId);
 
-	const newEpisodeShowIds = new Set<number>();
+	const categoryByShowId = new Map<number, WatchingCategory>();
 	if (watchingShowIds.length) {
-		const today = new Date().toISOString().slice(0, 10);
-		const windowStart = new Date(Date.now() - NEW_EPISODE_WINDOW_DAYS * 24 * 60 * 60 * 1000)
-			.toISOString()
-			.slice(0, 10);
+		const today = daysAgoIso(0);
+		const newEpisodeWindowStart = daysAgoIso(NEW_EPISODE_WINDOW_DAYS);
+		const staleThreshold = daysAgoIso(STALE_UNWATCHED_DAYS);
 
-		const recentAiredEpisodes = await db
+		const airedEpisodeRows = await db
 			.select({
 				showTmdbId: episodes.showTmdbId,
 				seasonNumber: episodes.seasonNumber,
-				episodeNumber: episodes.episodeNumber
+				episodeNumber: episodes.episodeNumber,
+				airDate: episodes.airDate
 			})
 			.from(episodes)
 			.where(
 				and(
 					inArray(episodes.showTmdbId, watchingShowIds),
-					gte(episodes.airDate, windowStart),
+					sql`${episodes.seasonNumber} != 0`,
+					sql`${episodes.airDate} is not null`,
 					lte(episodes.airDate, today)
 				)
 			);
@@ -91,15 +100,42 @@ export const load: PageServerLoad = async ({ locals }) => {
 					inArray(userWatches.tmdbId, watchingShowIds)
 				)
 			);
+
 		const watchedKey = (tmdbId: number, season: number, episode: number) =>
 			`${tmdbId}-${season}-${episode}`;
 		const watchedSet = new Set(
 			watchesForWatchingShows.map((w) => watchedKey(w.tmdbId, w.seasonNumber, w.episodeNumber))
 		);
 
-		for (const ep of recentAiredEpisodes) {
-			if (!watchedSet.has(watchedKey(ep.showTmdbId, ep.seasonNumber, ep.episodeNumber))) {
-				newEpisodeShowIds.add(ep.showTmdbId);
+		const airedByShowId = new Map<number, typeof airedEpisodeRows>();
+		for (const ep of airedEpisodeRows) {
+			const list = airedByShowId.get(ep.showTmdbId);
+			if (list) list.push(ep);
+			else airedByShowId.set(ep.showTmdbId, [ep]);
+		}
+
+		for (const tmdbId of watchingShowIds) {
+			const airedEpisodes = airedByShowId.get(tmdbId) ?? [];
+			const unwatched = airedEpisodes.filter(
+				(ep) => !watchedSet.has(watchedKey(tmdbId, ep.seasonNumber, ep.episodeNumber))
+			);
+
+			if (unwatched.length === 0) {
+				categoryByShowId.set(tmdbId, 'up_to_date');
+				continue;
+			}
+
+			const oldestUnwatchedAirDate = unwatched.reduce(
+				(min, ep) => (ep.airDate! < min ? ep.airDate! : min),
+				unwatched[0].airDate!
+			);
+
+			if (oldestUnwatchedAirDate >= newEpisodeWindowStart) {
+				categoryByShowId.set(tmdbId, 'watch_next');
+			} else if (oldestUnwatchedAirDate < staleThreshold) {
+				categoryByShowId.set(tmdbId, 'not_watched_for_a_while');
+			} else {
+				categoryByShowId.set(tmdbId, 'watching');
 			}
 		}
 	}
@@ -108,13 +144,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		if (t.mediaType === 'tv') {
 			const show = showById.get(t.tmdbId);
 			return show
-				? {
-						mediaType: 'tv',
-						tmdbId: t.tmdbId,
-						title: show.title,
-						posterPath: show.posterPath,
-						hasNewEpisode: newEpisodeShowIds.has(t.tmdbId)
-					}
+				? { mediaType: 'tv', tmdbId: t.tmdbId, title: show.title, posterPath: show.posterPath }
 				: null;
 		}
 		const movie = movieById.get(t.tmdbId);
@@ -153,17 +183,39 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})
 		.filter(isTrackedItem);
 
-	const watching = tracking
-		.filter((t) => t.status === 'watching')
-		.map(toItem)
-		.filter(isTrackedItem);
-	// Stable sort keeps shows with a new episode first while preserving the existing
-	// most-recently-tracked ordering within each group.
-	watching.sort((a, b) => Number(b.hasNewEpisode) - Number(a.hasNewEpisode));
+	// Movies don't have episodes to reason about, so they always land in the general
+	// Watching bucket alongside shows whose progress doesn't fit a more specific one.
+	const watchNext: TrackedItem[] = [];
+	const watching: TrackedItem[] = [];
+	const notWatchedForAWhile: TrackedItem[] = [];
+	const upToDate: TrackedItem[] = [];
+
+	for (const t of tracking.filter((t) => t.status === 'watching')) {
+		const item = toItem(t);
+		if (!item) continue;
+		const category: WatchingCategory =
+			t.mediaType === 'tv' ? (categoryByShowId.get(t.tmdbId) ?? 'watching') : 'watching';
+		switch (category) {
+			case 'watch_next':
+				watchNext.push(item);
+				break;
+			case 'not_watched_for_a_while':
+				notWatchedForAWhile.push(item);
+				break;
+			case 'up_to_date':
+				upToDate.push(item);
+				break;
+			default:
+				watching.push(item);
+		}
+	}
 
 	return {
 		recentlyWatched,
+		watchNext,
 		watching,
+		notWatchedForAWhile,
+		upToDate,
 		planToWatch: tracking
 			.filter((t) => t.status === 'plan_to_watch')
 			.map(toItem)

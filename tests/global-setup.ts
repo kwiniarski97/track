@@ -1,9 +1,12 @@
 import { execSync } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
 
-/** Runs once before the whole Vitest run: recreates a throwaway sqlite db and pushes
- * the current schema into it via drizzle-kit, so tests never touch the real local.db
- * and always run against up-to-date tables. */
+/** Runs once before the whole Vitest run: recreates a throwaway sqlite db and applies
+ * the migrations folder via drizzle-kit, so tests never touch the real local.db and
+ * always run against up-to-date tables. Uses `migrate` rather than `push` so the
+ * resulting db has the same `__drizzle_migrations` bookkeeping that db/index.ts's own
+ * startup `migrate()` call expects -- otherwise that call re-applies every migration
+ * against tables that already exist and blows up with "table already exists". */
 export default function setup() {
 	process.loadEnvFile('.env.test');
 	const dbPath = process.env.DATABASE_URL;
@@ -11,7 +14,7 @@ export default function setup() {
 
 	if (existsSync(dbPath)) rmSync(dbPath);
 	try {
-		execSync('npx drizzle-kit push --force', { env: process.env });
+		execSync('npx drizzle-kit migrate', { env: process.env });
 	} catch (error) {
 		// drizzle.config.ts sets verbose:true, which is noisy but useful when this fails.
 		console.error((error as { stdout?: Buffer }).stdout?.toString());
