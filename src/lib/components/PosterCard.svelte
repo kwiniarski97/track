@@ -34,7 +34,7 @@
 	);
 	const progressColorClass = $derived(
 		progress?.state === 'completed'
-			? 'bg-gradient-accent'
+			? 'bg-rainbow-sweep'
 			: progress?.state === 'up_to_date'
 				? 'bg-success'
 				: 'bg-warning'

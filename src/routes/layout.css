@@ -113,6 +113,40 @@
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent) 85%);
 	}
 
+	/* Rainbow highlight continuously sweeping across a completed show's progress bar. */
+	.bg-rainbow-sweep {
+		position: relative;
+		overflow: hidden;
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent) 85%);
+	}
+
+	.bg-rainbow-sweep::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(
+			100deg,
+			transparent 20%,
+			hsl(0 90% 70% / 60%) 34%,
+			hsl(55 90% 70% / 60%) 40%,
+			hsl(140 85% 65% / 60%) 46%,
+			hsl(200 90% 72% / 60%) 52%,
+			hsl(280 85% 75% / 60%) 58%,
+			transparent 72%
+		);
+		background-size: 260% 100%;
+		animation: rainbow-sweep 2.8s linear infinite;
+	}
+
+	@keyframes rainbow-sweep {
+		from {
+			background-position: 140% 0;
+		}
+		to {
+			background-position: -40% 0;
+		}
+	}
+
 	/* Diagonal light sweep, faded in on hover -- used for the "shiny" poster/button highlight. */
 	.sheen {
 		position: relative;
