@@ -69,12 +69,6 @@ Production images are built for `linux/amd64` and `linux/arm64` and published
 to `ghcr.io/kwiniarski97/track`, tagged with the semantic version (plus
 `latest`), whenever a release is cut (see `.github/workflows/release.yml`).
 
-Releases are managed by [release-please](https://github.com/googleapis/release-please):
-commits to `main` should use [Conventional Commits](https://www.conventionalcommits.org/)
-(`feat:`, `fix:`, `chore:`, ...) so it can determine the version bump. It opens/updates
-a release PR with the version bump and changelog; merging it cuts the GitHub release,
-tag, and Docker image.
-
 To run with Docker Compose, using the pre-built image:
 
 ```sh
@@ -85,3 +79,24 @@ docker compose -f docker-compose.prod.yml up -d
 `docker-compose.yml` builds the image locally instead, for testing Dockerfile
 changes. In both cases the SQLite database lives on the `./data` bind mount,
 so it survives container recreation.
+
+## Releases
+
+Versioning and changelogs are handled by
+[release-please](https://github.com/googleapis/release-please), driven entirely
+by commit messages on `main`:
+
+1. Every commit must follow [Conventional Commits](https://www.conventionalcommits.org/)
+   (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, ...) — a `commit-msg` husky hook runs
+   commitlint locally and rejects commits that don't.
+2. On every push to `main`, the `release-please` GitHub Action scans commits since
+   the last release and keeps an up-to-date release PR with the version bump
+   (`feat:` → minor, `fix:` → patch) and generated changelog. Some commit types
+   (`chore:`, `ci:`, `docs:`, ...) are tracked in the changelog but don't affect
+   the version number themselves.
+3. Merging that PR cuts the actual GitHub release and tag, which triggers the
+   `docker-publish` job to build and push the multi-arch image to
+   `ghcr.io/kwiniarski97/track`, tagged with the semantic version and `latest`.
+
+No manual version bumping or tagging — just write commit messages correctly and
+merge the release PR when you're ready to ship.
