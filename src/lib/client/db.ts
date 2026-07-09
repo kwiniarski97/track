@@ -47,7 +47,7 @@ export async function getOutboxMutations(): Promise<OutboxMutation[]> {
 	return db.getAll('outbox');
 }
 
-function watchIdentity(
+export function watchIdentity(
 	m: Pick<OutboxMutation, 'mediaType' | 'tmdbId' | 'seasonNumber' | 'episodeNumber'>
 ): string {
 	return `${m.mediaType}:${m.tmdbId}:${m.seasonNumber}:${m.episodeNumber}`;
@@ -65,4 +65,23 @@ export async function getPendingWatchOverride(
 		.filter((m) => watchIdentity(m) === identity)
 		.sort((a, b) => a.createdAt - b.createdAt);
 	return mutations.length > 0 ? mutations[mutations.length - 1].watched : null;
+}
+
+/**
+ * Last-write-wins queued mutations for every identity under one show/movie, keyed by
+ * watchIdentity. One getAll('outbox') instead of one per episode -- a 200-episode show
+ * would otherwise re-read the entire outbox 200 times on mount.
+ */
+export async function getPendingWatchOverrides(
+	mediaType: MediaType,
+	tmdbId: number
+): Promise<Map<string, boolean>> {
+	const overrides = new Map<string, boolean>();
+	const mutations = (await getOutboxMutations())
+		.filter((m) => m.mediaType === mediaType && m.tmdbId === tmdbId)
+		.sort((a, b) => a.createdAt - b.createdAt);
+	// Ascending order means later writes overwrite earlier map entries -- same
+	// last-write-wins rule as getPendingWatchOverride.
+	for (const m of mutations) overrides.set(watchIdentity(m), m.watched);
+	return overrides;
 }
