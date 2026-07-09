@@ -4,7 +4,7 @@
 	import { getLocale } from '$lib/paraglide/runtime';
 	import { m } from '$lib/paraglide/messages';
 	import { showStatusLabel, trackingStatusLabel } from '$lib/labels';
-	import { getPendingWatchOverride } from '$lib/client/db';
+	import { getPendingWatchOverrides, watchIdentity } from '$lib/client/db';
 	import { queueWatch } from '$lib/client/outbox';
 	import { applyAccentTheme } from '$lib/client/accent-theme';
 	import DetailHero from '$lib/components/DetailHero.svelte';
@@ -76,16 +76,22 @@
 		const showId = data.show.id;
 
 		(async () => {
+			// One outbox read for the whole show instead of one per episode -- the old
+			// per-episode helper re-read the entire outbox store on every call, which made
+			// mounting a 200-episode show do 200 serialized IndexedDB getAll()s.
+			const pending = await getPendingWatchOverrides('tv', showId);
 			const overrides: Record<string, boolean> = {};
 			for (const season of seasonsList) {
 				for (const episode of episodesFor(season.season_number)) {
-					const override = await getPendingWatchOverride(
-						'tv',
-						showId,
-						season.season_number,
-						episode.episodeNumber
+					const override = pending.get(
+						watchIdentity({
+							mediaType: 'tv',
+							tmdbId: showId,
+							seasonNumber: season.season_number,
+							episodeNumber: episode.episodeNumber
+						})
 					);
-					if (override !== null) {
+					if (override !== undefined) {
 						overrides[overrideKey(season.season_number, episode.episodeNumber)] = override;
 					}
 				}
