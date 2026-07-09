@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { and, eq } from 'drizzle-orm';
 import { db } from './db';
 import {
 	episodes,
+	movies,
 	seasons,
 	shows,
 	userTracking,
@@ -10,7 +11,28 @@ import {
 	users,
 	type TrackingStatus
 } from './db/schema';
-import { getShowProgress, syncShowCompletion } from './media';
+import { getShowDetails, getMovieDetails } from './tmdb';
+import type { TmdbMovieDetails, TmdbShowDetails } from './tmdb';
+import {
+	MEDIA_CACHE_TTL_MS,
+	getMovieCachedOrRefresh,
+	getShowCachedOrRefresh,
+	getShowProgress,
+	syncShowCompletion
+} from './media';
+
+// The cached-or-refresh tests need to prove whether a TMDB fetch happened, so the
+// network layer is mocked out; everything else in this file is purely db-driven and
+// never reaches these mocks.
+vi.mock('./tmdb', async (importOriginal) => ({
+	...(await importOriginal<typeof import('./tmdb')>()),
+	getShowDetails: vi.fn(),
+	getMovieDetails: vi.fn()
+}));
+// extractPosterColor downloads the poster image on the refresh path -- stub it out.
+vi.mock('./poster-color', () => ({
+	extractPosterColor: vi.fn(async () => null)
+}));
 
 function daysAgo(n: number): string {
 	return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -270,5 +292,208 @@ describe('getShowProgress', () => {
 		expect(result.get(COMPLETED_ID)).toEqual({ watched: 3, total: 5, state: 'completed' });
 		// No seasons cache at all -- omitted rather than a misleading 0/0.
 		expect(result.has(NEVER_OPENED_ID)).toBe(false);
+	});
+});
+
+/** A timestamp just past the TTL, so the row counts as stale. */
+function staleDate(): Date {
+	return new Date(Date.now() - MEDIA_CACHE_TTL_MS - 60 * 1000);
+}
+
+describe('getShowCachedOrRefresh', () => {
+	const SHOW_ID = 999021;
+
+	const SHOW_DETAILS: TmdbShowDetails = {
+		id: SHOW_ID,
+		name: 'Fresh Show',
+		overview: 'Fresh overview',
+		poster_path: '/fresh-poster.jpg',
+		backdrop_path: '/fresh-backdrop.jpg',
+		first_air_date: '2020-01-01',
+		status: 'Returning Series',
+		next_episode_to_air: null,
+		seasons: [{ season_number: 1, name: 'Season 1', episode_count: 8, air_date: '2020-01-01' }],
+		vote_average: 8.2,
+		vote_count: 240
+	};
+
+	/** Fully-populated cached row, as the current upsertShow would write it. */
+	async function seedCachedShow(updatedAt: Date) {
+		await db.insert(shows).values({
+			tmdbId: SHOW_ID,
+			title: 'Cached Show',
+			posterPath: '/cached-poster.jpg',
+			backdropPath: '/cached-backdrop.jpg',
+			voteAverage: 7.5,
+			voteCount: 100,
+			overview: 'Cached overview',
+			status: 'Ended',
+			updatedAt
+		});
+	}
+
+	async function seedCachedSeasons() {
+		await db.insert(seasons).values([
+			{ showTmdbId: SHOW_ID, seasonNumber: 0, name: 'Specials', episodeCount: 1 },
+			{ showTmdbId: SHOW_ID, seasonNumber: 1, name: 'Season 1', episodeCount: 5 }
+		]);
+	}
+
+	beforeEach(() => {
+		vi.mocked(getShowDetails).mockReset();
+		vi.mocked(getShowDetails).mockResolvedValue(SHOW_DETAILS);
+	});
+
+	afterEach(async () => {
+		await db.delete(seasons).where(eq(seasons.showTmdbId, SHOW_ID));
+		await db.delete(shows).where(eq(shows.tmdbId, SHOW_ID));
+	});
+
+	it('serves a TTL-fresh show from the db without any TMDB call', async () => {
+		await seedCachedShow(new Date());
+		await seedCachedSeasons();
+
+		const result = await getShowCachedOrRefresh(SHOW_ID);
+
+		expect(getShowDetails).not.toHaveBeenCalled();
+		expect(result).toEqual({
+			id: SHOW_ID,
+			name: 'Cached Show',
+			overview: 'Cached overview',
+			poster_path: '/cached-poster.jpg',
+			backdrop_path: '/cached-backdrop.jpg',
+			status: 'Ended',
+			vote_average: 7.5,
+			vote_count: 100,
+			seasons: [
+				{ season_number: 0, name: 'Specials', episode_count: 1, air_date: null },
+				{ season_number: 1, name: 'Season 1', episode_count: 5, air_date: null }
+			]
+		});
+	});
+
+	it('refetches from TMDB once the cached row is older than the TTL', async () => {
+		await seedCachedShow(staleDate());
+		await seedCachedSeasons();
+
+		const result = await getShowCachedOrRefresh(SHOW_ID);
+
+		expect(getShowDetails).toHaveBeenCalledTimes(1);
+		expect(result.name).toBe('Fresh Show');
+
+		// The refresh must also persist the new fields and re-cache the seasons.
+		const [row] = await db.select().from(shows).where(eq(shows.tmdbId, SHOW_ID));
+		expect(row.voteCount).toBe(240);
+		expect(row.backdropPath).toBe('/fresh-backdrop.jpg');
+		const [season1] = await db
+			.select()
+			.from(seasons)
+			.where(and(eq(seasons.showTmdbId, SHOW_ID), eq(seasons.seasonNumber, 1)));
+		expect(season1.episodeCount).toBe(8);
+	});
+
+	it('refetches a never-cached show', async () => {
+		const result = await getShowCachedOrRefresh(SHOW_ID);
+
+		expect(getShowDetails).toHaveBeenCalledTimes(1);
+		expect(result.name).toBe('Fresh Show');
+	});
+
+	it('refetches a fresh row whose seasons were never cached', async () => {
+		// e.g. a row written by the calendar job or an import, which never call
+		// cacheShowSeasons -- the show page can't render without a season list.
+		await seedCachedShow(new Date());
+
+		await getShowCachedOrRefresh(SHOW_ID);
+
+		expect(getShowDetails).toHaveBeenCalledTimes(1);
+	});
+
+	it('refetches a fresh row written before the vote/backdrop columns existed', async () => {
+		await db.insert(shows).values({ tmdbId: SHOW_ID, title: 'Legacy Show', status: 'Ended' });
+		await seedCachedSeasons();
+
+		await getShowCachedOrRefresh(SHOW_ID);
+
+		expect(getShowDetails).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('getMovieCachedOrRefresh', () => {
+	const MOVIE_ID = 999022;
+
+	const MOVIE_DETAILS: TmdbMovieDetails = {
+		id: MOVIE_ID,
+		title: 'Fresh Movie',
+		overview: 'Fresh overview',
+		poster_path: '/fresh-poster.jpg',
+		backdrop_path: '/fresh-backdrop.jpg',
+		release_date: '2021-06-01',
+		runtime: 121,
+		vote_average: 6.9,
+		vote_count: 500
+	};
+
+	async function seedCachedMovie(updatedAt: Date) {
+		await db.insert(movies).values({
+			tmdbId: MOVIE_ID,
+			title: 'Cached Movie',
+			posterPath: '/cached-poster.jpg',
+			backdropPath: '/cached-backdrop.jpg',
+			voteAverage: 7.1,
+			voteCount: 300,
+			overview: 'Cached overview',
+			releaseDate: '2019-03-15',
+			runtime: 95,
+			updatedAt
+		});
+	}
+
+	beforeEach(() => {
+		vi.mocked(getMovieDetails).mockReset();
+		vi.mocked(getMovieDetails).mockResolvedValue(MOVIE_DETAILS);
+	});
+
+	afterEach(async () => {
+		await db.delete(movies).where(eq(movies.tmdbId, MOVIE_ID));
+	});
+
+	it('serves a TTL-fresh movie from the db without any TMDB call', async () => {
+		await seedCachedMovie(new Date());
+
+		const result = await getMovieCachedOrRefresh(MOVIE_ID);
+
+		expect(getMovieDetails).not.toHaveBeenCalled();
+		expect(result).toEqual({
+			id: MOVIE_ID,
+			title: 'Cached Movie',
+			overview: 'Cached overview',
+			poster_path: '/cached-poster.jpg',
+			backdrop_path: '/cached-backdrop.jpg',
+			release_date: '2019-03-15',
+			runtime: 95,
+			vote_average: 7.1,
+			vote_count: 300
+		});
+	});
+
+	it('refetches from TMDB once the cached row is older than the TTL', async () => {
+		await seedCachedMovie(staleDate());
+
+		const result = await getMovieCachedOrRefresh(MOVIE_ID);
+
+		expect(getMovieDetails).toHaveBeenCalledTimes(1);
+		expect(result.title).toBe('Fresh Movie');
+
+		const [row] = await db.select().from(movies).where(eq(movies.tmdbId, MOVIE_ID));
+		expect(row.voteCount).toBe(500);
+		expect(row.backdropPath).toBe('/fresh-backdrop.jpg');
+	});
+
+	it('refetches a never-cached movie', async () => {
+		const result = await getMovieCachedOrRefresh(MOVIE_ID);
+
+		expect(getMovieDetails).toHaveBeenCalledTimes(1);
+		expect(result.title).toBe('Fresh Movie');
 	});
 });

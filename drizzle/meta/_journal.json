@@ -36,6 +36,13 @@
       "when": 1783518521882,
       "tag": "0004_skinny_penance",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1783602900031,
+      "tag": "0005_neat_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }
