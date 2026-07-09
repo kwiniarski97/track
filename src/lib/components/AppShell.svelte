@@ -123,12 +123,13 @@
 			{@const active = item.isActive(page.url.pathname)}
 			<a
 				href={item.href}
-				class="flex flex-1 flex-col items-center gap-1 px-2 py-2.5 text-[11px] font-medium transition-colors {active
+				aria-label={item.label()}
+				title={item.label()}
+				class="flex flex-1 items-center justify-center py-3 transition-colors {active
 					? 'text-accent'
 					: 'text-text-muted'}"
 			>
-				<item.Icon size={21} />
-				{item.label()}
+				<item.Icon size={23} />
 			</a>
 		{/each}
 	</nav>
