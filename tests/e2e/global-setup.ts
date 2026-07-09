@@ -49,3 +49,15 @@ export default function globalSetup() {
 	);
 	db.close();
 }
+
+// Also runnable directly as `node tests/e2e/global-setup.ts` (see playwright.config.ts's
+// webServer.command) -- Playwright does not guarantee this globalSetup hook finishes
+// before the webServer command's own process starts (its first request lazily opens
+// the app's one persistent db connection, e.g. via a readiness probe). If that request
+// lands before this rm+recreate below finishes, the server is left permanently attached
+// to the now-deleted file for its whole lifetime, and every session lookup fails. Running
+// this synchronously before `vite dev` even starts, instead of relying on globalSetup's
+// timing relative to webServer, closes that race.
+if (path.resolve(process.argv[1] ?? '') === path.resolve(new URL(import.meta.url).pathname)) {
+	globalSetup();
+}
