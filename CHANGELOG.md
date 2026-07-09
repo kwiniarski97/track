@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/kwiniarski97/track/compare/v1.0.1...v1.1.0) (2026-07-09)
+
+
+### Features
+
+* add PWA install prompt for mobile ([c1da772](https://github.com/kwiniarski97/track/commit/c1da772ad981b33face14d5a1a09bf4d40638fdf))
+
 ## [1.0.1](https://github.com/kwiniarski97/track/compare/v1.0.0...v1.0.1) (2026-07-08)
 
 
