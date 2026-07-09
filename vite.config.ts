@@ -68,6 +68,18 @@ export default defineConfig({
 					{
 						urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
 						handler: 'NetworkOnly'
+					},
+					{
+						// TMDB posters/backdrops load as cross-origin <img> (no-cors), so the SW
+						// sees opaque responses with status 0 -- statuses must include 0 or
+						// nothing from image.tmdb.org would ever be cached.
+						urlPattern: ({ url }) => url.hostname === 'image.tmdb.org',
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'tmdb-images',
+							expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
+							cacheableResponse: { statuses: [0, 200] }
+						}
 					}
 				]
 			}

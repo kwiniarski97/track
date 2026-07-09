@@ -28,7 +28,8 @@
 	} = $props();
 
 	const backdrop = $derived(tmdbBackdropUrl(backdropPath));
-	const poster = $derived(tmdbPosterUrl(posterPath, 'w500'));
+	const backdropSmall = $derived(tmdbBackdropUrl(backdropPath, 'w780'));
+	const poster = $derived(tmdbPosterUrl(posterPath, 'w342'));
 
 	// If we arrived here via an in-app navigation, prefer real browser back
 	// (returns to wherever the user actually came from -- home, calendar,
@@ -49,7 +50,13 @@
 <div class="relative -mx-4 -mt-6 overflow-hidden rounded-b-panel md:-mx-6 md:-mt-10">
 	<div class="relative aspect-video w-full sm:aspect-[21/9]">
 		{#if backdrop}
-			<img src={backdrop} alt="" class="h-full w-full object-cover" />
+			<img
+				src={backdrop}
+				srcset="{backdropSmall} 780w, {backdrop} 1280w"
+				sizes="100vw"
+				alt=""
+				class="h-full w-full object-cover"
+			/>
 		{:else}
 			<div class="h-full w-full bg-surface"></div>
 		{/if}
