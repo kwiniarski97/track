@@ -34,6 +34,14 @@ export default defineConfig(
 		}
 	},
 	{
+		// Playwright statically inspects a test callback's first argument to see which
+		// fixtures it destructures -- `({}, testInfo)` (skipping straight to the second,
+		// non-fixture argument) is its documented way of requesting none, so the pattern
+		// must stay literally empty rather than a renamed/prefixed identifier.
+		files: ['tests/e2e/**/*.ts'],
+		rules: { 'no-empty-pattern': 'off' }
+	},
+	{
 		// Override or add rule settings here, such as:
 		// 'svelte/button-has-type': 'error'
 		rules: {}
