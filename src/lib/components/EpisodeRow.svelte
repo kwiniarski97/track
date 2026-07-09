@@ -33,9 +33,24 @@
 	let checkEl = $state<HTMLElement>();
 	let circleEl = $state<HTMLElement>();
 
+	// Plain let, deliberately not $state: we only compare against the previous run's
+	// value inside the effect. Initialized from the mount-time prop so rows that mount
+	// already watched don't replay the pop/confetti -- a fully-watched season would
+	// otherwise spawn hundreds of particle elements on page load. Only a live
+	// false->true toggle animates. Capturing the mount-time value (rather than staying
+	// reactive to it) is exactly the intent, hence the ignore.
+	// svelte-ignore state_referenced_locally
+	let prevWatched = watched;
+
 	$effect(() => {
-		if (watched && checkEl) checkPop(checkEl);
-		if (watched && circleEl) confettiBurst(circleEl);
+		const justWatched = watched && !prevWatched;
+		prevWatched = watched;
+		if (justWatched) {
+			// Effects run after the DOM update, so the {#if watched} block has rendered
+			// and both bind:this elements are set by the time we animate them.
+			if (checkEl) checkPop(checkEl);
+			if (circleEl) confettiBurst(circleEl);
+		}
 	});
 
 	const still = $derived(tmdbStillUrl(stillPath));
