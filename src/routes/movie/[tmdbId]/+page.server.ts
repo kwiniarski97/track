@@ -1,12 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { NO_EPISODE, jellyfinLibraryItems, userTracking, userWatches } from '$lib/server/db/schema';
-import { refreshMovie } from '$lib/server/media';
+import { getMovieCachedOrRefresh } from '$lib/server/media';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const tmdbId = Number(params.tmdbId);
-	const details = await refreshMovie(tmdbId);
+	const details = await getMovieCachedOrRefresh(tmdbId);
 
 	const [tracking] = await db
 		.select()
