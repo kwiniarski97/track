@@ -18,6 +18,26 @@
 		children: Snippet;
 	} = $props();
 
+	/** The service worker's `pages` runtime cache (see vite.config.ts) stores full,
+	 * already-authenticated HTML per URL, not per session -- on a shared device, whoever
+	 * loads a page next could otherwise be served the previous user's cached markup (e.g.
+	 * their Recently Watched list) if the network is briefly slow or unreachable. Clearing
+	 * it here, before the POST actually lands, closes that window at the one point where
+	 * we know for certain the current user's session is ending. */
+	async function clearPagesCacheBeforeLogout(event: SubmitEvent) {
+		if (!('caches' in window)) return;
+		event.preventDefault();
+		// Captured before the `await` below: the browser resets event.currentTarget to
+		// null once the (synchronous) dispatch phase ends, which has already happened by
+		// the time this async handler resumes.
+		const form = event.currentTarget as HTMLFormElement;
+		try {
+			await caches.delete('pages');
+		} finally {
+			form.submit();
+		}
+	}
+
 	const navItems = [
 		{ href: resolve('/'), label: m.nav_home, Icon: IconHome, isActive: (p: string) => p === '/' },
 		{
@@ -97,7 +117,7 @@
 						{user.name}
 					</a>
 				{/if}
-				<form method="POST" action="/logout">
+				<form method="POST" action="/logout" onsubmit={clearPagesCacheBeforeLogout}>
 					<button
 						type="submit"
 						aria-label={m.log_out()}
