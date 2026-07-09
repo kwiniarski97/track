@@ -15,21 +15,24 @@ export async function syncJellyfin(userId: string): Promise<void> {
 
 	const playedItems = await getPlayedItems(link.jellyfinUserId);
 	if (playedItems.length > 0) {
-		await db
-			.insert(userWatches)
-			.values(
-				playedItems.map((item) => ({
-					userId,
-					mediaType: item.mediaType,
-					tmdbId: item.tmdbId,
-					seasonNumber: item.seasonNumber ?? NO_EPISODE,
-					episodeNumber: item.episodeNumber ?? NO_EPISODE,
-					source: 'jellyfin' as const
-				}))
-			)
-			// Leaves an existing row (manual or earlier import) untouched -- Jellyfin
-			// reporting the same episode later should never clobber or duplicate it.
-			.onConflictDoNothing();
+		const rows = playedItems.map((item) => ({
+			userId,
+			mediaType: item.mediaType,
+			tmdbId: item.tmdbId,
+			seasonNumber: item.seasonNumber ?? NO_EPISODE,
+			episodeNumber: item.episodeNumber ?? NO_EPISODE,
+			source: 'jellyfin' as const
+		}));
+		// Chunked so a large watch history stays under SQLite's bound-parameter limit
+		// (each row binds several parameters; one giant multi-row insert would throw).
+		for (let i = 0; i < rows.length; i += 500) {
+			await db
+				.insert(userWatches)
+				.values(rows.slice(i, i + 500))
+				// Leaves an existing row (manual or earlier import) untouched -- Jellyfin
+				// reporting the same episode later should never clobber or duplicate it.
+				.onConflictDoNothing();
+		}
 
 		const showTmdbIds = new Set(
 			playedItems.filter((item) => item.mediaType === 'tv').map((item) => item.tmdbId)
@@ -40,10 +43,18 @@ export async function syncJellyfin(userId: string): Promise<void> {
 	}
 
 	const libraryItems = await getLibraryTmdbIds(link.jellyfinUserId);
-	await db.delete(jellyfinLibraryItems);
-	if (libraryItems.length > 0) {
-		await db.insert(jellyfinLibraryItems).values(libraryItems).onConflictDoNothing();
-	}
+	// Rebuilt atomically: without the transaction, a page view (or another user's sync)
+	// landing between the delete and the re-insert sees an empty library table, and a
+	// failed re-insert would leave it wiped until the next sync.
+	db.transaction((tx) => {
+		tx.delete(jellyfinLibraryItems).run();
+		for (let i = 0; i < libraryItems.length; i += 2000) {
+			tx.insert(jellyfinLibraryItems)
+				.values(libraryItems.slice(i, i + 2000))
+				.onConflictDoNothing()
+				.run();
+		}
+	});
 }
 
 export async function syncAllLinkedJellyfinAccounts(): Promise<void> {

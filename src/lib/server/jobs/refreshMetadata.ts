@@ -46,6 +46,26 @@ async function getCompletionCheckTracking(
 		.where(and(...conditions));
 }
 
+// Each refresh is dominated by its TMDB round-trip, so overlapping a few keeps the job
+// from scaling linearly with catalog size while staying polite to TMDB's rate limits.
+// The DB writes inside each task are synchronous (better-sqlite3), so they never truly
+// run concurrently -- only the network waits overlap.
+const TMDB_REFRESH_CONCURRENCY = 4;
+
+async function forEachConcurrent<T>(
+	items: Iterable<T>,
+	limit: number,
+	task: (item: T) => Promise<void>
+): Promise<void> {
+	const queue = [...items];
+	const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+		for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
+			await task(item);
+		}
+	});
+	await Promise.all(workers);
+}
+
 /** Refreshes cached TMDB metadata (including next-episode-air-date) for every actively
  * tracked show/movie, plus every completed show (so a renewal shows up), then re-syncs
  * completion for the watching/completed set -- everyone's if `userId` is omitted (the
@@ -62,22 +82,22 @@ export async function refreshTrackedMetadata(userId?: string): Promise<void> {
 	const showIds = new Set(activeShowIds);
 	for (const { tmdbId } of completionCheckTracking) showIds.add(tmdbId);
 
-	for (const tmdbId of showIds) {
+	await forEachConcurrent(showIds, TMDB_REFRESH_CONCURRENCY, async (tmdbId) => {
 		try {
 			const details = await refreshShow(tmdbId);
 			await cacheShowSeasons(tmdbId, details);
 		} catch (error) {
 			console.error(`[refreshMetadata] failed to refresh show ${tmdbId}`, error);
 		}
-	}
+	});
 
-	for (const tmdbId of movieIds) {
+	await forEachConcurrent(movieIds, TMDB_REFRESH_CONCURRENCY, async (tmdbId) => {
 		try {
 			await refreshMovie(tmdbId);
 		} catch (error) {
 			console.error(`[refreshMetadata] failed to refresh movie ${tmdbId}`, error);
 		}
-	}
+	});
 
 	for (const { userId: trackingUserId, tmdbId } of completionCheckTracking) {
 		try {
