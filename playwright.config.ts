@@ -10,7 +10,6 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
 	testDir: './tests/e2e',
-	globalSetup: './tests/e2e/global-setup.ts',
 	fullyParallel: true,
 	reporter: 'list',
 	use: {
@@ -18,7 +17,14 @@ export default defineConfig({
 		trace: 'retain-on-failure'
 	},
 	webServer: {
-		command: `npx vite dev --port ${PORT}`,
+		// Recreates and reseeds the db, then only starts `vite dev` once that's fully
+		// done. Deliberately not Playwright's `globalSetup` hook: that isn't guaranteed to
+		// finish before this command's own process starts, and this command's first
+		// request (Playwright's own readiness probe against `url` below) is enough to
+		// lazily open the app's one persistent db connection -- if that races ahead of a
+		// separate globalSetup's rm+recreate, the server is left permanently attached to
+		// the deleted file and every session lookup fails for its whole lifetime.
+		command: `node --experimental-strip-types tests/e2e/global-setup.ts && npx vite dev --port ${PORT}`,
 		url: BASE_URL,
 		reuseExistingServer: !process.env.CI,
 		stdout: 'pipe',
