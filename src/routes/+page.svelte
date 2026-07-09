@@ -37,7 +37,7 @@
 			...data.notStarted,
 			...data.planToWatch
 		]
-			.map((item) => tmdbPosterUrl(item.posterPath, 'w342'))
+			.map((item) => tmdbPosterUrl(item.posterPath, 'w185'))
 			.filter((url) => url !== null)
 			.slice(0, 10)
 	);

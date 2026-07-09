@@ -1,6 +1,6 @@
 export function tmdbPosterUrl(
 	path: string | null,
-	size: 'w200' | 'w342' | 'w500' = 'w342'
+	size: 'w185' | 'w200' | 'w342' | 'w500' = 'w342'
 ): string | null {
 	return path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
 }
