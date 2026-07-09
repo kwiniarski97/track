@@ -5,6 +5,7 @@
 	import { initSync } from '$lib/client/sync';
 	import { reducedMotion } from '$lib/motion';
 	import AppShell from '$lib/components/AppShell.svelte';
+	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 
@@ -34,4 +35,5 @@
 			</div>
 		{/key}
 	</AppShell>
+	<InstallPrompt />
 {/if}
