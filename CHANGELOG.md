@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.2.0](https://github.com/kwiniarski97/track/compare/v1.1.0...v1.2.0) (2026-07-09)
+
+
+### Features
+
+* show a looping shimmer on posters while their page loads ([cdaff64](https://github.com/kwiniarski97/track/commit/cdaff649fb80455ad07440c7783e01d5f159636d))
+* show icon-only tabs in mobile bottom nav ([c118d15](https://github.com/kwiniarski97/track/commit/c118d15c7d06bac72787eae8425bfc637b515bb6))
+
+
+### Bug Fixes
+
+* stop service worker from leaking a previous user's cached page ([8e7bd51](https://github.com/kwiniarski97/track/commit/8e7bd51e4bfb75e19fe77c093a2e965183457212))
+
+
+### Performance Improvements
+
+* **client:** batch outbox reads and animate episodes only on toggle ([7f7dfe3](https://github.com/kwiniarski97/track/commit/7f7dfe3d8457d9c01d0b64b47ec13ffbddb2c52e))
+* **db:** enable WAL and harden the background jobs ([3168dea](https://github.com/kwiniarski97/track/commit/3168deaa75262c1f7485bd3c0403f310fe2b3313))
+* **pwa:** cache TMDB images in the service worker and right-size heroes ([caae7d5](https://github.com/kwiniarski97/track/commit/caae7d560af2ba1ab954c8d7007139f243281e20))
+* **server:** serve warm show/movie pages from the local TMDB cache ([b4d5cdf](https://github.com/kwiniarski97/track/commit/b4d5cdfe4190e1d68ce1e235bb5923245800a962))
+
 ## [1.1.0](https://github.com/kwiniarski97/track/compare/v1.0.1...v1.1.0) (2026-07-09)
 
 
