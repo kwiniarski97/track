@@ -50,6 +50,11 @@ export const shows = sqliteTable('shows', {
 	// Hex accent color extracted from the poster, used to retint the app's brand accent
 	// while its show page is open -- see extractPosterColor in poster-color.ts.
 	posterColor: text('poster_color'),
+	// Backdrop image and audience score are shown on the show page's hero; cached here so
+	// a TTL-fresh page view can be served entirely from the db without a TMDB fetch.
+	backdropPath: text('backdrop_path'),
+	voteAverage: real('vote_average'),
+	voteCount: integer('vote_count'),
 	overview: text('overview'),
 	firstAirDate: text('first_air_date'),
 	status: text('status'),
@@ -108,6 +113,11 @@ export const movies = sqliteTable('movies', {
 	tmdbId: integer('tmdb_id').primaryKey(),
 	title: text('title').notNull(),
 	posterPath: text('poster_path'),
+	// Same reason as on `shows`: the movie page's hero backdrop and score badge must be
+	// servable from the db when the cached row is still within its TTL.
+	backdropPath: text('backdrop_path'),
+	voteAverage: real('vote_average'),
+	voteCount: integer('vote_count'),
 	overview: text('overview'),
 	releaseDate: text('release_date'),
 	runtime: integer('runtime'),

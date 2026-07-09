@@ -36,6 +36,9 @@ async function upsertShow(details: TmdbShowDetails): Promise<void> {
 		title: details.name,
 		posterPath: details.poster_path,
 		posterColor,
+		backdropPath: details.backdrop_path,
+		voteAverage: details.vote_average,
+		voteCount: details.vote_count,
 		overview: details.overview,
 		firstAirDate: details.first_air_date,
 		status: details.status,
@@ -58,22 +61,43 @@ export async function refreshShow(tmdbId: number): Promise<TmdbShowDetails> {
 	return details;
 }
 
+/** Batch size for multi-row upserts: 100 rows of our widest table (10 columns) stays
+ * comfortably under SQLite's bound-parameter limit while still cutting a per-row loop
+ * down to a handful of statements. */
+export const UPSERT_CHUNK_SIZE = 100;
+
+export function chunk<T>(items: T[], size: number): T[][] {
+	const chunks: T[][] = [];
+	for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+	return chunks;
+}
+
 /** Upserts per-season episode counts, which drive both the show page's season list
  * and syncShowCompletion's "has everything been watched" total. */
 export async function cacheShowSeasons(tmdbId: number, details: TmdbShowDetails): Promise<void> {
-	for (const season of details.seasons) {
+	const values = details.seasons.map((season) => ({
+		showTmdbId: tmdbId,
+		seasonNumber: season.season_number,
+		name: season.name,
+		episodeCount: season.episode_count,
+		airDate: season.air_date
+	}));
+	// Drizzle throws on a multi-row insert with an empty values array.
+	if (values.length === 0) return;
+
+	// One multi-row statement per chunk instead of one round trip per season --
+	// `excluded.*` refers to each conflicting row's own incoming values.
+	for (const batch of chunk(values, UPSERT_CHUNK_SIZE)) {
 		await db
 			.insert(seasons)
-			.values({
-				showTmdbId: tmdbId,
-				seasonNumber: season.season_number,
-				name: season.name,
-				episodeCount: season.episode_count,
-				airDate: season.air_date
-			})
+			.values(batch)
 			.onConflictDoUpdate({
 				target: [seasons.showTmdbId, seasons.seasonNumber],
-				set: { name: season.name, episodeCount: season.episode_count, airDate: season.air_date }
+				set: {
+					name: sql`excluded.name`,
+					episodeCount: sql`excluded.episode_count`,
+					airDate: sql`excluded.air_date`
+				}
 			});
 	}
 }
@@ -83,6 +107,9 @@ async function upsertMovie(details: TmdbMovieDetails): Promise<void> {
 		tmdbId: details.id,
 		title: details.title,
 		posterPath: details.poster_path,
+		backdropPath: details.backdrop_path,
+		voteAverage: details.vote_average,
+		voteCount: details.vote_count,
 		overview: details.overview,
 		releaseDate: details.release_date,
 		runtime: details.runtime
@@ -97,6 +124,114 @@ export async function refreshMovie(tmdbId: number): Promise<TmdbMovieDetails> {
 	const details = await getMovieDetails(tmdbId);
 	await upsertMovie(details);
 	return details;
+}
+
+/** How long a cached show/movie row may serve detail-page views before we go back to
+ * TMDB. The twice-daily refreshMetadata job keeps tracked titles fresher than this
+ * anyway, so in practice only untracked titles ever age out via a page view. */
+export const MEDIA_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** The subset of TMDB show details the show page actually renders, kept in TMDB's
+ * snake_case shape so both a fresh `TmdbShowDetails` response and a row rebuilt from
+ * the db satisfy it structurally -- the page component never needs to know which path
+ * produced it. */
+export type ShowSummary = {
+	id: number;
+	name: string;
+	overview: string;
+	poster_path: string | null;
+	backdrop_path: string | null;
+	status: string;
+	vote_average: number;
+	vote_count: number;
+	seasons: Array<{
+		season_number: number;
+		name: string;
+		episode_count: number;
+		air_date: string | null;
+	}>;
+};
+
+/** Same idea as ShowSummary, for the movie page. */
+export type MovieSummary = {
+	id: number;
+	title: string;
+	overview: string;
+	poster_path: string | null;
+	backdrop_path: string | null;
+	release_date: string | null;
+	runtime: number | null;
+	vote_average: number;
+	vote_count: number;
+};
+
+/** Serves the show page from the local cache when the row is fresh, only falling back
+ * to a live TMDB fetch (+ season re-cache) when it's missing or stale -- previously
+ * every page view paid for a TMDB round trip. Rows written before the vote/status
+ * columns existed (voteCount/status null) count as stale so they self-heal on the next
+ * visit instead of rendering without a score badge for a whole TTL. */
+export async function getShowCachedOrRefresh(tmdbId: number): Promise<ShowSummary> {
+	const [cached] = await db.select().from(shows).where(eq(shows.tmdbId, tmdbId));
+	if (
+		cached &&
+		cached.voteCount !== null &&
+		cached.voteAverage !== null &&
+		cached.status !== null &&
+		Date.now() - cached.updatedAt.getTime() < MEDIA_CACHE_TTL_MS
+	) {
+		const seasonRows = await db.select().from(seasons).where(eq(seasons.showTmdbId, tmdbId));
+		// No cached seasons means the row was written by a path that never calls
+		// cacheShowSeasons (calendar job, import) -- the page can't render without a
+		// season list, so treat it as a miss rather than serving an empty show.
+		if (seasonRows.length > 0) {
+			return {
+				id: cached.tmdbId,
+				name: cached.title,
+				// The db column is nullable but TMDB always sends a string (possibly
+				// empty), so an empty string is the faithful round trip.
+				overview: cached.overview ?? '',
+				poster_path: cached.posterPath,
+				backdrop_path: cached.backdropPath,
+				status: cached.status,
+				vote_average: cached.voteAverage,
+				vote_count: cached.voteCount,
+				seasons: seasonRows.map((s) => ({
+					season_number: s.seasonNumber,
+					name: s.name,
+					episode_count: s.episodeCount,
+					air_date: s.airDate
+				}))
+			};
+		}
+	}
+
+	const details = await refreshShow(tmdbId);
+	await cacheShowSeasons(tmdbId, details);
+	return details;
+}
+
+/** Movie-page counterpart of getShowCachedOrRefresh (no seasons involved). */
+export async function getMovieCachedOrRefresh(tmdbId: number): Promise<MovieSummary> {
+	const [cached] = await db.select().from(movies).where(eq(movies.tmdbId, tmdbId));
+	if (
+		cached &&
+		cached.voteCount !== null &&
+		cached.voteAverage !== null &&
+		Date.now() - cached.updatedAt.getTime() < MEDIA_CACHE_TTL_MS
+	) {
+		return {
+			id: cached.tmdbId,
+			title: cached.title,
+			overview: cached.overview ?? '',
+			poster_path: cached.posterPath,
+			backdrop_path: cached.backdropPath,
+			release_date: cached.releaseDate,
+			runtime: cached.runtime,
+			vote_average: cached.voteAverage,
+			vote_count: cached.voteCount
+		};
+	}
+	return refreshMovie(tmdbId);
 }
 
 // TMDB's `status` field for a show is one of these -- only the first two mean no more
