@@ -8,6 +8,11 @@
 	"nav_settings": "Settings",
 	"log_out": "Log out",
 
+	"install_prompt_android_body": "Install Watched for quick access and offline support.",
+	"install_prompt_ios_body": "Add Watched to your Home Screen: tap the Share icon, then \"Add to Home Screen\".",
+	"install_prompt_install_button": "Install",
+	"install_prompt_dismiss": "Dismiss",
+
 	"login_with_pocket_id": "Sign in with Pocket ID",
 	"login_tagline": "Every episode and movie you watch, tracked in one place.",
 

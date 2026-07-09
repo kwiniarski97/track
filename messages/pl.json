@@ -8,6 +8,11 @@
 	"nav_settings": "Ustawienia",
 	"log_out": "Wyloguj się",
 
+	"install_prompt_android_body": "Zainstaluj Obejrzane, aby mieć szybki dostęp i działanie offline.",
+	"install_prompt_ios_body": "Dodaj Obejrzane do ekranu głównego: stuknij ikonę Udostępnij, a następnie „Dodaj do ekranu początkowego”.",
+	"install_prompt_install_button": "Zainstaluj",
+	"install_prompt_dismiss": "Zamknij",
+
 	"login_with_pocket_id": "Zaloguj się przez Pocket ID",
 	"login_tagline": "Każdy odcinek i film, który oglądasz, śledzony w jednym miejscu.",
 
