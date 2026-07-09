@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ResolvedPathname } from '$app/types';
+	import { navigating } from '$app/state';
 	import { tmdbPosterUrl } from '$lib/tmdb-client';
 	import { reveal } from '$lib/motion';
 	import IconCheck from './icons/IconCheck.svelte';
@@ -33,6 +34,7 @@
 	} = $props();
 
 	const poster = $derived(tmdbPosterUrl(posterPath));
+	const isLoading = $derived(navigating.to?.url.pathname === href);
 	const progressPercent = $derived(
 		progress ? Math.max(4, Math.min(100, (progress.watched / progress.total) * 100)) : 0
 	);
@@ -47,7 +49,9 @@
 
 <a {href} use:reveal={{ index }} class="group block">
 	<div
-		class="sheen relative aspect-[2/3] overflow-hidden rounded-card bg-surface shadow-card ring-1 ring-white/5 transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-glow-lg group-hover:ring-accent/30"
+		class="sheen relative aspect-[2/3] overflow-hidden rounded-card bg-surface shadow-card ring-1 ring-white/5 transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-glow-lg group-hover:ring-accent/30 {isLoading
+			? 'shimmer-loading'
+			: ''}"
 	>
 		{#if poster}
 			<img

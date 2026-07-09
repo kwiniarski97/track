@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { navigating } from '$app/state';
 	import { getLocale } from '$lib/paraglide/runtime';
 	import { m } from '$lib/paraglide/messages';
 	import { tmdbPosterUrl } from '$lib/tmdb-client';
@@ -90,23 +91,32 @@
 				<div class="flex flex-col gap-2">
 					{#each entries as entry, i (entry.mediaType + entry.tmdbId + entry.date)}
 						{@const poster = tmdbPosterUrl(entry.posterPath)}
-						<a
-							use:reveal={{ index: gi * 3 + i }}
-							href={entry.mediaType === 'tv'
+						{@const entryHref =
+							entry.mediaType === 'tv'
 								? resolve('/show/[tmdbId]', { tmdbId: String(entry.tmdbId) })
 								: resolve('/movie/[tmdbId]', { tmdbId: String(entry.tmdbId) })}
+						<a
+							use:reveal={{ index: gi * 3 + i }}
+							href={entryHref}
 							class="group flex items-center gap-3 rounded-card border border-border bg-surface p-3 transition-colors hover:border-border-strong"
 						>
-							{#if poster}
-								<img
-									src={poster}
-									alt=""
-									loading="lazy"
-									class="h-16 w-11 flex-none rounded-md object-cover"
-								/>
-							{:else}
-								<div class="h-16 w-11 flex-none rounded-md bg-surface-2"></div>
-							{/if}
+							<div
+								class="sheen relative h-16 w-11 flex-none overflow-hidden rounded-md {navigating.to
+									?.url.pathname === entryHref
+									? 'shimmer-loading'
+									: ''}"
+							>
+								{#if poster}
+									<img
+										src={poster}
+										alt=""
+										loading="lazy"
+										class="h-16 w-11 rounded-md object-cover"
+									/>
+								{:else}
+									<div class="h-16 w-11 rounded-md bg-surface-2"></div>
+								{/if}
+							</div>
 							<div class="min-w-0">
 								<p class="truncate text-sm font-medium text-text">{entry.title}</p>
 								<p class="text-xs text-text-muted">{detailFor(entry)}</p>

@@ -177,4 +177,23 @@
 		opacity: 1;
 		background-position: -30% 0%;
 	}
+
+	/* Loops the same sweep as .sheen:hover, continuously, as a lightweight loading
+	   indicator on a poster while its destination page is being navigated to.
+	   `linear` (not ease-in-out) keeps the band moving at a constant speed through the
+	   loop restart -- easing decelerates to a near-stop right before the position snaps
+	   back to the start, which reads as a stutter rather than a continuous sweep. */
+	.shimmer-loading::after {
+		opacity: 1;
+		animation: shimmer-sweep 1.3s linear infinite;
+	}
+
+	@keyframes shimmer-sweep {
+		from {
+			background-position: 140% 0%;
+		}
+		to {
+			background-position: -40% 0%;
+		}
+	}
 }
