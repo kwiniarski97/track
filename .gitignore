@@ -17,6 +17,7 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
+!.env.e2e
 
 # Vite
 vite.config.js.timestamp-*
@@ -26,6 +27,10 @@ src/lib/paraglide
 project.inlang/cache/
 # SQLite
 *.db
+
+# Playwright
+/playwright-report
+/test-results
 
 # Personal import data (contains an access token)
 /tvtime-data
