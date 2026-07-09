@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { shows, userTracking, users } from '$lib/server/db/schema';
+import { shows, userTracking, userWatches, users } from '$lib/server/db/schema';
 import { load, type CompletedItem } from './+page.server';
 
 const WATCHING_ID = 999004;
@@ -35,9 +35,16 @@ describe('profile page load', () => {
 			{ userId, mediaType: 'tv', tmdbId: DROPPED_ID, status: 'dropped' },
 			{ userId, mediaType: 'tv', tmdbId: PLAN_ID, status: 'plan_to_watch' }
 		]);
+
+		// A 'watching' show with no logged watch lands in notStartedShows, not
+		// watchingShows -- log one episode so the show counts as started.
+		await db
+			.insert(userWatches)
+			.values({ userId, mediaType: 'tv', tmdbId: WATCHING_ID, seasonNumber: 1, episodeNumber: 1 });
 	});
 
 	afterEach(async () => {
+		await db.delete(userWatches).where(eq(userWatches.userId, userId));
 		await db.delete(userTracking).where(eq(userTracking.userId, userId));
 		await db.delete(users).where(eq(users.id, userId));
 	});
@@ -51,12 +58,14 @@ describe('profile page load', () => {
 			watchingShows: CompletedItem[];
 			completedShows: CompletedItem[];
 			droppedShows: CompletedItem[];
+			notStartedShows: CompletedItem[];
 			stats: { showsCompleted: number };
 		};
 
 		expect(result.watchingShows.map((s) => s.tmdbId)).toEqual([WATCHING_ID]);
 		expect(result.completedShows.map((s) => s.tmdbId)).toEqual([COMPLETED_ID]);
 		expect(result.droppedShows.map((s) => s.tmdbId)).toEqual([DROPPED_ID]);
+		expect(result.notStartedShows).toEqual([]);
 		expect(result.stats.showsCompleted).toBe(1);
 	});
 });
@@ -102,9 +111,17 @@ describe('profile page load sorting', () => {
 				createdAt: new Date('2024-06-01T00:00:00Z')
 			}
 		]);
+
+		// Both shows need a logged watch to count as started, otherwise they land in
+		// notStartedShows and the watchingShows sort assertions see an empty list.
+		await db.insert(userWatches).values([
+			{ userId, mediaType: 'tv', tmdbId: ZEBRA_ID, seasonNumber: 1, episodeNumber: 1 },
+			{ userId, mediaType: 'tv', tmdbId: ALPHA_ID, seasonNumber: 1, episodeNumber: 1 }
+		]);
 	});
 
 	afterEach(async () => {
+		await db.delete(userWatches).where(eq(userWatches.userId, userId));
 		await db.delete(userTracking).where(eq(userTracking.userId, userId));
 		await db.delete(users).where(eq(users.id, userId));
 	});
