@@ -13,11 +13,31 @@
 
 	const transitionDuration = reducedMotion() ? 0 : 160;
 
+	// The service worker's `pages` runtime cache (vite.config.ts) stores full HTML per
+	// URL, not per session. AppShell's logout button already clears it proactively, but
+	// that only covers an explicit log-out -- a session can also just be replaced by a
+	// different Pocket ID login on the same device without ever hitting /logout (e.g. the
+	// previous session expired, or the browser was simply handed to someone else). This
+	// catches that case too: whenever the authenticated user differs from the last one
+	// this device rendered a page for, drop the cache before it can serve their stale,
+	// already-authenticated markup to the new user.
+	const LAST_USER_ID_KEY = 'watched:last-user-id';
+
 	onMount(() => {
 		// Registered with an absolute path -- a relative "sw.js" would resolve against
 		// whatever page happens to mount this layout first (e.g. /show/1396/sw.js).
 		if ('serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+		}
+		if (data.user) {
+			const lastUserId = localStorage.getItem(LAST_USER_ID_KEY);
+			// Only a *change* from a previously-recorded user is a switch worth guarding
+			// against -- treating the very first-ever load the same way would race the
+			// cache we're about to legitimately populate for this same, first user.
+			if (lastUserId && lastUserId !== data.user.id) {
+				if ('caches' in window) caches.delete('pages').catch(() => {});
+			}
+			localStorage.setItem(LAST_USER_ID_KEY, data.user.id);
 		}
 		initSync();
 	});
