@@ -39,3 +39,8 @@ project.inlang/cache/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Claude Code agent worktrees -- untracked, but eslint/prettier don't know that from
+# .git/info/exclude alone (that's local-only, not read by includeIgnoreFile), so without
+# this they walk into a worktree's generated build output and fail every commit.
+.claude/worktrees/

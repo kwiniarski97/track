@@ -5,10 +5,12 @@
 
 	let {
 		seasons,
-		selected
+		selected,
+		onSelect
 	}: {
 		seasons: Array<{ season_number: number }>;
 		selected: number;
+		onSelect?: (seasonNumber: number) => void;
 	} = $props();
 
 	let containerEl = $state<HTMLElement>();
@@ -28,6 +30,7 @@
 
 	function scrollToSeason(event: MouseEvent, seasonNumber: number) {
 		event.preventDefault();
+		onSelect?.(seasonNumber);
 		document.getElementById(`season-${seasonNumber}`)?.scrollIntoView({
 			behavior: 'smooth',
 			block: 'start'
