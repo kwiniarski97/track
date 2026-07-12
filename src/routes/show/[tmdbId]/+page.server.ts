@@ -107,9 +107,8 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		});
 	const defaultSeason =
 		seasonsWithEpisodes.find((s) => s.season_number > 0) ?? seasonsWithEpisodes[0];
-	const requestedSeason = Number(
-		url.searchParams.get('season') ?? defaultSeason?.season_number ?? 1
-	);
+	const seasonParam = url.searchParams.get('season');
+	const requestedSeason = Number(seasonParam ?? defaultSeason?.season_number ?? 1);
 
 	await ensureAllSeasonsEpisodesCached(tmdbId, seasonsWithEpisodes);
 
@@ -164,6 +163,10 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		show: details,
 		seasons: seasonsWithEpisodes,
 		selectedSeason: requestedSeason,
+		// Only set when the URL explicitly asked for a season (e.g. a deep link); lets
+		// the client tell "user asked for this season" apart from "nothing requested,
+		// pick whichever season should be expanded by default".
+		explicitSeason: seasonParam !== null ? requestedSeason : null,
 		episodesBySeason,
 		watchedEpisodeNumbersBySeason,
 		trackingStatus: tracking?.status ?? null,

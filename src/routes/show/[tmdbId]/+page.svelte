@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
+	import { slide } from 'svelte/transition';
 	import { resolve } from '$app/paths';
 	import { getLocale } from '$lib/paraglide/runtime';
 	import { m } from '$lib/paraglide/messages';
@@ -7,11 +8,14 @@
 	import { getPendingWatchOverrides, watchIdentity } from '$lib/client/db';
 	import { queueWatch } from '$lib/client/outbox';
 	import { applyAccentTheme } from '$lib/client/accent-theme';
+	import { reducedMotion } from '$lib/motion';
+	import { pickDefaultExpandedSeason } from '$lib/season-expansion';
 	import DetailHero from '$lib/components/DetailHero.svelte';
 	import TrackButton from '$lib/components/TrackButton.svelte';
 	import SeasonTabs from '$lib/components/SeasonTabs.svelte';
 	import EpisodeRow from '$lib/components/EpisodeRow.svelte';
 	import IconCheck from '$lib/components/icons/IconCheck.svelte';
+	import IconChevronDown from '$lib/components/icons/IconChevronDown.svelte';
 	import AudienceScoreBadge from '$lib/components/AudienceScoreBadge.svelte';
 
 	let { data } = $props();
@@ -42,6 +46,22 @@
 
 	function releasedEpisodesFor(seasonNumber: number) {
 		return episodesFor(seasonNumber).filter((episode) => isReleased(episode.airDate));
+	}
+
+	let expandedSeasons = $state<Record<number, boolean>>({});
+
+	function isSeasonExpanded(seasonNumber: number): boolean {
+		return expandedSeasons[seasonNumber] ?? false;
+	}
+
+	function toggleSeasonExpanded(seasonNumber: number) {
+		expandedSeasons = { ...expandedSeasons, [seasonNumber]: !isSeasonExpanded(seasonNumber) };
+	}
+
+	// Jumping to a season via its tab should reveal its episodes even if it was
+	// collapsed, rather than scrolling to a header with nothing shown underneath it.
+	function expandSeason(seasonNumber: number) {
+		expandedSeasons = { ...expandedSeasons, [seasonNumber]: true };
 	}
 
 	const airDateFormatter = new Intl.DateTimeFormat(getLocale(), {
@@ -100,8 +120,31 @@
 		})();
 	});
 
-	onMount(() => {
-		document.getElementById(`season-${data.selectedSeason}`)?.scrollIntoView({ block: 'start' });
+	// Collapses every season except the one that should be open by default -- an
+	// explicitly requested `?season=` deep link if present, otherwise the oldest season
+	// that still has an unwatched released episode (see pickDefaultExpandedSeason).
+	// Keyed only on the show id (via untrack) so toggling episodes/seasons afterwards
+	// doesn't fight the user by recomputing and collapsing things back.
+	$effect(() => {
+		void data.show.id;
+		untrack(() => {
+			const releasedBySeason: Record<number, number[]> = {};
+			for (const season of data.seasons) {
+				releasedBySeason[season.season_number] = releasedEpisodesFor(season.season_number).map(
+					(episode) => episode.episodeNumber
+				);
+			}
+			const target =
+				data.explicitSeason ??
+				pickDefaultExpandedSeason(
+					data.seasons.map((season) => ({ seasonNumber: season.season_number })),
+					releasedBySeason,
+					data.watchedEpisodeNumbersBySeason
+				);
+			expandedSeasons = target === null ? {} : { [target]: true };
+
+			document.getElementById(`season-${target}`)?.scrollIntoView({ block: 'start' });
+		});
 	});
 
 	// Retints the whole app's brand accent (buttons, checkmarks, nav bar) to match this
@@ -120,6 +163,13 @@
 
 	async function toggleEpisode(seasonNumber: number, episodeNumber: number, watched: boolean) {
 		pendingOverrides = { ...pendingOverrides, [overrideKey(seasonNumber, episodeNumber)]: watched };
+		// If that was the last unwatched episode, collapse the season -- but only as a
+		// side effect of *completing* it here, not a standing rule, so the user can still
+		// manually reopen an already-watched season (e.g. to review it) without it
+		// snapping shut again.
+		if (watched && isSeasonFullyWatched(seasonNumber)) {
+			expandedSeasons = { ...expandedSeasons, [seasonNumber]: false };
+		}
 		await queueWatch({
 			mediaType: 'tv',
 			tmdbId: data.show.id,
@@ -148,6 +198,9 @@
 			overrides[overrideKey(seasonNumber, episode.episodeNumber)] = watched;
 		}
 		pendingOverrides = overrides;
+		if (watched && episodeList.length > 0) {
+			expandedSeasons = { ...expandedSeasons, [seasonNumber]: false };
+		}
 		await Promise.all(
 			episodeList.map((episode) =>
 				queueWatch({
@@ -196,17 +249,33 @@
 	<div
 		class="sticky top-0 z-10 mt-6 -mx-4 bg-bg/95 px-4 py-3 backdrop-blur-sm md:top-14 md:-mx-6 md:px-6"
 	>
-		<SeasonTabs seasons={data.seasons} selected={data.selectedSeason} />
+		<SeasonTabs seasons={data.seasons} selected={data.selectedSeason} onSelect={expandSeason} />
 	</div>
 
 	{#each data.seasons as season (season.season_number)}
 		<section id={`season-${season.season_number}`} class="mt-6 scroll-mt-24 md:scroll-mt-32">
 			<div class="mb-3 flex items-center gap-3">
-				<h2 class="text-lg font-semibold text-text">
-					{season.season_number === 0
-						? m.season_specials()
-						: m.season_heading({ number: season.season_number })}
-				</h2>
+				<button
+					type="button"
+					class="-mx-1 -my-1 flex flex-1 cursor-pointer items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-2"
+					aria-expanded={isSeasonExpanded(season.season_number)}
+					aria-controls={`season-${season.season_number}-episodes`}
+					onclick={() => toggleSeasonExpanded(season.season_number)}
+				>
+					<IconChevronDown
+						size={18}
+						class="flex-none text-text-muted transition-transform duration-200 ease-out {isSeasonExpanded(
+							season.season_number
+						)
+							? ''
+							: '-rotate-90'}"
+					/>
+					<h2 class="text-lg font-semibold text-text">
+						{season.season_number === 0
+							? m.season_specials()
+							: m.season_heading({ number: season.season_number })}
+					</h2>
+				</button>
 				<button
 					type="button"
 					disabled={!isSeasonReleased(season.season_number)}
@@ -227,22 +296,28 @@
 				</button>
 			</div>
 
-			<div class="flex flex-col gap-2">
-				{#each episodesFor(season.season_number) as episode (episode.episodeNumber)}
-					<EpisodeRow
-						number={episode.episodeNumber}
-						title={episode.title}
-						watched={isWatched(season.season_number, episode.episodeNumber)}
-						unreleasedNote={unreleasedNoteFor(episode.airDate)}
-						stillPath={episode.stillPath}
-						runtime={episode.runtime}
-						voteAverage={episode.voteAverage}
-						voteCount={episode.voteCount}
-						onToggle={(watched) =>
-							toggleEpisode(season.season_number, episode.episodeNumber, watched)}
-					/>
-				{/each}
-			</div>
+			{#if isSeasonExpanded(season.season_number)}
+				<div
+					id={`season-${season.season_number}-episodes`}
+					class="flex flex-col gap-2"
+					transition:slide={{ duration: reducedMotion() ? 0 : 250 }}
+				>
+					{#each episodesFor(season.season_number) as episode (episode.episodeNumber)}
+						<EpisodeRow
+							number={episode.episodeNumber}
+							title={episode.title}
+							watched={isWatched(season.season_number, episode.episodeNumber)}
+							unreleasedNote={unreleasedNoteFor(episode.airDate)}
+							stillPath={episode.stillPath}
+							runtime={episode.runtime}
+							voteAverage={episode.voteAverage}
+							voteCount={episode.voteCount}
+							onToggle={(watched) =>
+								toggleEpisode(season.season_number, episode.episodeNumber, watched)}
+						/>
+					{/each}
+				</div>
+			{/if}
 		</section>
 	{/each}
 </DetailHero>
