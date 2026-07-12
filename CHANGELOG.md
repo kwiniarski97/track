@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/kwiniarski97/track/compare/v1.2.0...v1.3.0) (2026-07-12)
+
+
+### Features
+
+* collapse watched seasons on the show page by default ([6acc8c7](https://github.com/kwiniarski97/track/commit/6acc8c71e04d20f0ad66c7245139480b798a8f38))
+
 ## [1.2.0](https://github.com/kwiniarski97/track/compare/v1.1.0...v1.2.0) (2026-07-09)
 
 
