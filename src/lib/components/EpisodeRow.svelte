@@ -75,7 +75,7 @@
 	</span>
 	<span class="min-w-0 flex-1 text-sm {watched ? 'text-text-muted line-through' : 'text-text'}">
 		<span class="font-medium">E{number}</span> — {title}
-		{#if overview}
+		{#if overview && !unreleasedNote}
 			<span class="mt-0.5 line-clamp-2 text-xs text-text-muted no-underline">{overview}</span>
 		{/if}
 		{#if unreleasedNote}
