@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { episodes, seasons, shows, userTracking, users } from '$lib/server/db/schema';
 import { getSeasonDetails, getShowDetails } from '$lib/server/tmdb';
@@ -82,6 +82,7 @@ describe('show page load', () => {
 	const SHOW_DETAILS: TmdbShowDetails = {
 		id: LOAD_ID,
 		name: 'Fresh Show',
+		original_language: 'en',
 		overview: 'Fresh overview',
 		poster_path: '/fresh-poster.jpg',
 		backdrop_path: '/fresh-backdrop.jpg',
@@ -233,6 +234,46 @@ describe('show page load', () => {
 		// Episode cache is still complete, so no per-season fetches are needed.
 		expect(getSeasonDetails).not.toHaveBeenCalled();
 		expect(data.show.name).toBe('Fresh Show');
+	});
+
+	it('refetches only the seasons whose cached titles are placeholders or empty', async () => {
+		await seedFreshCache(new Date());
+		// Cached before the original-name fallback existed: a missing Polish translation
+		// left the TMDB placeholder (or an empty string) in the episode cache.
+		await db
+			.update(episodes)
+			.set({ title: 'Odcinek 2' })
+			.where(
+				and(
+					eq(episodes.showTmdbId, LOAD_ID),
+					eq(episodes.seasonNumber, 1),
+					eq(episodes.episodeNumber, 2)
+				)
+			);
+		await db
+			.update(episodes)
+			.set({ title: '' })
+			.where(
+				and(
+					eq(episodes.showTmdbId, LOAD_ID),
+					eq(episodes.seasonNumber, 2),
+					eq(episodes.episodeNumber, 1)
+				)
+			);
+
+		const data = await runLoad();
+
+		expect(getSeasonDetails).toHaveBeenCalledTimes(2);
+		expect(getSeasonDetails).toHaveBeenCalledWith(LOAD_ID, 1);
+		expect(getSeasonDetails).toHaveBeenCalledWith(LOAD_ID, 2);
+		expect(data.episodesBySeason[1].map((e: { title: string }) => e.title)).toEqual([
+			'S1E1',
+			'S1E2'
+		]);
+		expect(data.episodesBySeason[2].map((e: { title: string }) => e.title)).toEqual([
+			'S2E1',
+			'S2E2'
+		]);
 	});
 
 	it('fetches show details and every season for a never-cached show', async () => {

@@ -161,9 +161,21 @@ export async function searchTv(query: string): Promise<TmdbTvSearchResult[]> {
 	return data.results;
 }
 
+// TMDB has no per-field translation fallback: an episode without a Polish translation
+// comes back as a locale placeholder ("Odcinek 5") rather than its real name.
+function isEpisodeNamePlaceholder(name: string, episodeNumber: number): boolean {
+	return name === '' || name === `Odcinek ${episodeNumber}`;
+}
+
+async function getOriginalLanguage(tmdbId: number): Promise<string> {
+	const data = await tmdbFetch<{ original_language: string }>(`/tv/${tmdbId}`);
+	return data.original_language;
+}
+
 export type TmdbShowDetails = {
 	id: number;
 	name: string;
+	original_language: string;
 	overview: string;
 	poster_path: string | null;
 	backdrop_path: string | null;
@@ -185,8 +197,17 @@ export type TmdbShowDetails = {
 	vote_count: number;
 };
 
-export function getShowDetails(tmdbId: number): Promise<TmdbShowDetails> {
-	return tmdbFetch<TmdbShowDetails>(`/tv/${tmdbId}`);
+export async function getShowDetails(tmdbId: number): Promise<TmdbShowDetails> {
+	const details = await tmdbFetch<TmdbShowDetails>(`/tv/${tmdbId}`);
+	const next = details.next_episode_to_air;
+	if (next && isEpisodeNamePlaceholder(next.name, next.episode_number)) {
+		const original = await tmdbFetch<TmdbShowDetails>(`/tv/${tmdbId}`, {
+			language: details.original_language
+		});
+		const originalName = original.next_episode_to_air?.name;
+		if (originalName) next.name = originalName;
+	}
+	return details;
 }
 
 export type TmdbSeasonDetails = {
@@ -201,8 +222,28 @@ export type TmdbSeasonDetails = {
 	}>;
 };
 
-export function getSeasonDetails(tmdbId: number, seasonNumber: number): Promise<TmdbSeasonDetails> {
-	return tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`);
+export async function getSeasonDetails(
+	tmdbId: number,
+	seasonNumber: number
+): Promise<TmdbSeasonDetails> {
+	const data = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`);
+	if (!data.episodes.some((ep) => isEpisodeNamePlaceholder(ep.name, ep.episode_number))) {
+		return data;
+	}
+
+	const original = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`, {
+		language: await getOriginalLanguage(tmdbId)
+	});
+	const originalNames = new Map(original.episodes.map((ep) => [ep.episode_number, ep.name]));
+
+	return {
+		...data,
+		episodes: data.episodes.map((ep) =>
+			isEpisodeNamePlaceholder(ep.name, ep.episode_number)
+				? { ...ep, name: originalNames.get(ep.episode_number) || ep.name }
+				: ep
+		)
+	};
 }
 
 export type TmdbMovieDetails = {
