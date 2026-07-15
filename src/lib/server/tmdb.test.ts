@@ -39,9 +39,10 @@ afterEach(() => {
 });
 
 describe('getSeasonDetails', () => {
-	const episode = (episode_number: number, name: string) => ({
+	const episode = (episode_number: number, name: string, overview = `Opis ${episode_number}`) => ({
 		episode_number,
 		name,
+		overview,
 		air_date: '2024-01-01',
 		runtime: 30,
 		still_path: null,
@@ -99,6 +100,65 @@ describe('getSeasonDetails', () => {
 
 		expect(result.episodes[0].name).toBe('Odcinek 5: Finał');
 		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('exposes episode overviews', async () => {
+		mockTmdb([
+			{
+				path: '/tv/100/season/1',
+				language: 'pl-PL',
+				data: { episodes: [episode(1, 'Rok 3000', 'Załoga budzi się w roku 3000.')] }
+			}
+		]);
+
+		const result = await getSeasonDetails(100, 1);
+
+		expect(result.episodes[0].overview).toBe('Załoga budzi się w roku 3000.');
+	});
+
+	it('fills a missing Polish overview from the original language', async () => {
+		mockTmdb([
+			{
+				path: '/tv/100/season/1',
+				language: 'pl-PL',
+				data: { episodes: [episode(1, 'Prawdziwa nazwa', ''), episode(2, 'Inna nazwa')] }
+			},
+			{ path: '/tv/100', language: 'pl-PL', data: { original_language: 'ja' } },
+			{
+				path: '/tv/100/season/1',
+				language: 'ja',
+				data: {
+					episodes: [episode(1, '第1話', 'Original overview'), episode(2, '第2話', 'ignored')]
+				}
+			}
+		]);
+
+		const result = await getSeasonDetails(100, 1);
+
+		expect(result.episodes.map((e) => e.overview)).toEqual(['Original overview', 'Opis 2']);
+		// Translated names stay even though the original season was fetched for overviews.
+		expect(result.episodes.map((e) => e.name)).toEqual(['Prawdziwa nazwa', 'Inna nazwa']);
+	});
+
+	it('fills both the name and overview of an untranslated episode', async () => {
+		mockTmdb([
+			{
+				path: '/tv/100/season/1',
+				language: 'pl-PL',
+				data: { episodes: [episode(1, 'Odcinek 1', '')] }
+			},
+			{ path: '/tv/100', language: 'pl-PL', data: { original_language: 'ja' } },
+			{
+				path: '/tv/100/season/1',
+				language: 'ja',
+				data: { episodes: [episode(1, '第1話', 'Original overview')] }
+			}
+		]);
+
+		const result = await getSeasonDetails(100, 1);
+
+		expect(result.episodes[0].name).toBe('第1話');
+		expect(result.episodes[0].overview).toBe('Original overview');
 	});
 
 	it('keeps the placeholder when the original language has no name either', async () => {

@@ -11,6 +11,7 @@
 		title,
 		watched,
 		unreleasedNote = null,
+		overview = null,
 		stillPath = null,
 		runtime = null,
 		voteAverage = null,
@@ -23,6 +24,7 @@
 		// Set (to e.g. "Airs Mar 4, 2026") when the episode hasn't aired yet -- disables
 		// the row instead of letting someone mark an episode watched before it exists.
 		unreleasedNote?: string | null;
+		overview?: string | null;
 		stillPath?: string | null;
 		runtime?: number | null;
 		voteAverage?: number | null;
@@ -73,6 +75,9 @@
 	</span>
 	<span class="min-w-0 flex-1 text-sm {watched ? 'text-text-muted line-through' : 'text-text'}">
 		<span class="font-medium">E{number}</span> — {title}
+		{#if overview}
+			<span class="mt-0.5 line-clamp-2 text-xs text-text-muted no-underline">{overview}</span>
+		{/if}
 		{#if unreleasedNote}
 			<span class="mt-0.5 block text-xs text-text-faint no-underline">{unreleasedNote}</span>
 		{/if}
