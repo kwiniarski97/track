@@ -63,21 +63,26 @@ async function ensureAllSeasonsEpisodesCached(
 	tmdbId: number,
 	seasonsList: Array<{ season_number: number }>
 ) {
-	// One grouped query instead of a probe per season. `needsBackfill` is 1 when every
-	// cached row of the season lacks runtime/voteAverage -- i.e. it was cached before
-	// those columns existed and should be refetched to backfill them. (Partial nulls,
-	// e.g. unaired episodes with no runtime yet, don't trigger a refetch.)
+	// One grouped query instead of a probe per season. A season needs a refetch when
+	// every cached row lacks runtime/voteAverage -- i.e. it was cached before those
+	// columns existed and should be refetched to backfill them (partial nulls, e.g.
+	// unaired episodes with no runtime yet, don't trigger a refetch) -- or when any row
+	// still holds the "Odcinek N" placeholder (or an empty title) that TMDB returned
+	// before getSeasonDetails learned to fall back to the original-language name.
 	const cachedRows = await db
 		.select({
 			seasonNumber: episodes.seasonNumber,
-			needsBackfill: sql<number>`min(case when ${episodes.runtime} is null or ${episodes.voteAverage} is null then 1 else 0 end)`
+			needsRefetch: sql<number>`max(
+				min(case when ${episodes.runtime} is null or ${episodes.voteAverage} is null then 1 else 0 end),
+				max(case when ${episodes.title} = '' or ${episodes.title} = 'Odcinek ' || ${episodes.episodeNumber} then 1 else 0 end)
+			)`
 		})
 		.from(episodes)
 		.where(eq(episodes.showTmdbId, tmdbId))
 		.groupBy(episodes.seasonNumber);
-	const backfillBySeason = new Map(cachedRows.map((r) => [r.seasonNumber, r.needsBackfill]));
+	const refetchBySeason = new Map(cachedRows.map((r) => [r.seasonNumber, r.needsRefetch]));
 
-	const missing = seasonsList.filter((season) => backfillBySeason.get(season.season_number) !== 0);
+	const missing = seasonsList.filter((season) => refetchBySeason.get(season.season_number) !== 0);
 
 	// better-sqlite3 is synchronous, so the inserts serialize regardless -- the win here
 	// is overlapping the TMDB network fetches instead of paying per-season latency.

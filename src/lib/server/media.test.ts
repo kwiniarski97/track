@@ -306,6 +306,7 @@ describe('getShowCachedOrRefresh', () => {
 	const SHOW_DETAILS: TmdbShowDetails = {
 		id: SHOW_ID,
 		name: 'Fresh Show',
+		original_language: 'en',
 		overview: 'Fresh overview',
 		poster_path: '/fresh-poster.jpg',
 		backdrop_path: '/fresh-backdrop.jpg',
