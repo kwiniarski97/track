@@ -308,6 +308,7 @@
 							title={episode.title}
 							watched={isWatched(season.season_number, episode.episodeNumber)}
 							unreleasedNote={unreleasedNoteFor(episode.airDate)}
+							overview={episode.overview}
 							stillPath={episode.stillPath}
 							runtime={episode.runtime}
 							voteAverage={episode.voteAverage}

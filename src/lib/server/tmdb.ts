@@ -214,6 +214,7 @@ export type TmdbSeasonDetails = {
 	episodes: Array<{
 		episode_number: number;
 		name: string;
+		overview: string;
 		air_date: string | null;
 		runtime: number | null;
 		still_path: string | null;
@@ -227,22 +228,30 @@ export async function getSeasonDetails(
 	seasonNumber: number
 ): Promise<TmdbSeasonDetails> {
 	const data = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`);
-	if (!data.episodes.some((ep) => isEpisodeNamePlaceholder(ep.name, ep.episode_number))) {
+	const needsOriginal = (ep: TmdbSeasonDetails['episodes'][number]) =>
+		isEpisodeNamePlaceholder(ep.name, ep.episode_number) || ep.overview === '';
+	if (!data.episodes.some(needsOriginal)) {
 		return data;
 	}
 
 	const original = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`, {
 		language: await getOriginalLanguage(tmdbId)
 	});
-	const originalNames = new Map(original.episodes.map((ep) => [ep.episode_number, ep.name]));
+	const originalByNumber = new Map(original.episodes.map((ep) => [ep.episode_number, ep]));
 
 	return {
 		...data,
-		episodes: data.episodes.map((ep) =>
-			isEpisodeNamePlaceholder(ep.name, ep.episode_number)
-				? { ...ep, name: originalNames.get(ep.episode_number) || ep.name }
-				: ep
-		)
+		episodes: data.episodes.map((ep) => {
+			const originalEp = originalByNumber.get(ep.episode_number);
+			if (!originalEp) return ep;
+			return {
+				...ep,
+				name: isEpisodeNamePlaceholder(ep.name, ep.episode_number)
+					? originalEp.name || ep.name
+					: ep.name,
+				overview: ep.overview || originalEp.overview
+			};
+		})
 	};
 }
 

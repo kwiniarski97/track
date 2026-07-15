@@ -23,6 +23,9 @@ async function ensureSeasonEpisodesCached(tmdbId: number, seasonNumber: number) 
 		seasonNumber,
 		episodeNumber: ep.episode_number,
 		title: ep.name,
+		// Coalesce so a TMDB response missing the field can't store null, which the
+		// needsRefetch probe below reads as "cached before overviews existed".
+		overview: ep.overview ?? '',
 		airDate: ep.air_date,
 		runtime: ep.runtime,
 		stillPath: ep.still_path,
@@ -43,6 +46,7 @@ async function ensureSeasonEpisodesCached(tmdbId: number, seasonNumber: number) 
 				target: [episodes.showTmdbId, episodes.seasonNumber, episodes.episodeNumber],
 				set: {
 					title: sql`excluded.title`,
+					overview: sql`excluded.overview`,
 					airDate: sql`excluded.air_date`,
 					runtime: sql`excluded.runtime`,
 					stillPath: sql`excluded.still_path`,
@@ -68,13 +72,15 @@ async function ensureAllSeasonsEpisodesCached(
 	// columns existed and should be refetched to backfill them (partial nulls, e.g.
 	// unaired episodes with no runtime yet, don't trigger a refetch) -- or when any row
 	// still holds the "Odcinek N" placeholder (or an empty title) that TMDB returned
-	// before getSeasonDetails learned to fall back to the original-language name.
+	// before getSeasonDetails learned to fall back to the original-language name, or a
+	// null overview from before that column existed (absent overviews are stored as '').
 	const cachedRows = await db
 		.select({
 			seasonNumber: episodes.seasonNumber,
 			needsRefetch: sql<number>`max(
 				min(case when ${episodes.runtime} is null or ${episodes.voteAverage} is null then 1 else 0 end),
-				max(case when ${episodes.title} = '' or ${episodes.title} = 'Odcinek ' || ${episodes.episodeNumber} then 1 else 0 end)
+				max(case when ${episodes.title} = '' or ${episodes.title} = 'Odcinek ' || ${episodes.episodeNumber} then 1 else 0 end),
+				max(case when ${episodes.overview} is null then 1 else 0 end)
 			)`
 		})
 		.from(episodes)

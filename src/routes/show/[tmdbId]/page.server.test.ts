@@ -102,6 +102,7 @@ describe('show page load', () => {
 			episodes: [1, 2].map((n) => ({
 				episode_number: n,
 				name: `S1E${n}`,
+				overview: `S1E${n} fresh overview`,
 				air_date: '2020-01-01',
 				runtime: 45,
 				still_path: null,
@@ -113,6 +114,7 @@ describe('show page load', () => {
 			episodes: [1, 2].map((n) => ({
 				episode_number: n,
 				name: `S2E${n}`,
+				overview: `S2E${n} fresh overview`,
 				air_date: '2021-01-01',
 				runtime: 45,
 				still_path: null,
@@ -153,6 +155,7 @@ describe('show page load', () => {
 			seasonNumber,
 			episodeNumber,
 			title: `S${seasonNumber}E${episodeNumber}`,
+			overview: `S${seasonNumber}E${episodeNumber} cached overview`,
 			airDate: '2020-01-01',
 			runtime: 45,
 			stillPath: null,
@@ -234,6 +237,33 @@ describe('show page load', () => {
 		// Episode cache is still complete, so no per-season fetches are needed.
 		expect(getSeasonDetails).not.toHaveBeenCalled();
 		expect(data.show.name).toBe('Fresh Show');
+	});
+
+	it('serves cached episode overviews without hitting TMDB', async () => {
+		await seedFreshCache(new Date());
+
+		const data = await runLoad();
+
+		expect(getSeasonDetails).not.toHaveBeenCalled();
+		expect(data.episodesBySeason[1][0].overview).toBe('S1E1 cached overview');
+	});
+
+	it('refetches seasons cached before episode overviews existed', async () => {
+		await seedFreshCache(new Date());
+		await db
+			.update(episodes)
+			.set({ overview: null })
+			.where(and(eq(episodes.showTmdbId, LOAD_ID), eq(episodes.seasonNumber, 1)));
+
+		const data = await runLoad();
+
+		expect(getSeasonDetails).toHaveBeenCalledTimes(1);
+		expect(getSeasonDetails).toHaveBeenCalledWith(LOAD_ID, 1);
+		expect(data.episodesBySeason[1].map((e: { overview: string | null }) => e.overview)).toEqual([
+			'S1E1 fresh overview',
+			'S1E2 fresh overview'
+		]);
+		expect(data.episodesBySeason[2][0].overview).toBe('S2E1 cached overview');
 	});
 
 	it('refetches only the seasons whose cached titles are placeholders or empty', async () => {
