@@ -73,16 +73,21 @@
 			<img src={still} alt="" loading="lazy" class="h-full w-full object-cover" />
 		{/if}
 	</span>
-	<span class="min-w-0 flex-1 text-sm {watched ? 'text-text-muted line-through' : 'text-text'}">
-		<span class="font-medium">E{number}</span> — {title}
+	<span class="min-w-0 flex-1 text-sm {watched ? 'text-text-muted' : 'text-text'}">
+		<!-- Only the episode's own name gets struck through. text-decoration propagates to
+		     descendants and can't be cancelled by them, so this can't live on the wrapper:
+		     the strike bled onto the overview, runtime and score badge. -->
+		<span class={watched ? 'line-through' : ''}>
+			<span class="font-medium">E{number}</span> — {title}
+		</span>
 		{#if overview && !unreleasedNote}
-			<span class="mt-0.5 line-clamp-2 text-xs text-text-muted no-underline">{overview}</span>
+			<span class="mt-0.5 line-clamp-2 text-xs text-text-muted">{overview}</span>
 		{/if}
 		{#if unreleasedNote}
-			<span class="mt-0.5 block text-xs text-text-faint no-underline">{unreleasedNote}</span>
+			<span class="mt-0.5 block text-xs text-text-faint">{unreleasedNote}</span>
 		{/if}
 		{#if !unreleasedNote && (runtime || voteAverage)}
-			<span class="mt-1 flex flex-wrap items-center gap-2 no-underline">
+			<span class="mt-1 flex flex-wrap items-center gap-2">
 				{#if runtime}
 					<span class="flex items-center gap-1 text-xs text-text-muted">
 						<IconClock size={12} />
