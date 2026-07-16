@@ -81,6 +81,12 @@
 	"watched_label": "Watched",
 	"mark_season_watched": "Mark season as watched",
 	"unmark_season_watched": "Mark season as unwatched",
+	"season_progress_count": "{watched}/{total}",
+	"season_progress_label": "{watched} of {total} episodes watched",
+	"season_not_aired": "Not aired yet",
+	"show_next_episode": "Next: S{season}E{episode} · {date}",
+	"show_overview_more": "More",
+	"show_overview_less": "Less",
 
 	"calendar_title": "Calendar",
 	"calendar_empty": "No upcoming episodes or releases for your tracked shows and movies.",

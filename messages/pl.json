@@ -81,6 +81,12 @@
 	"watched_label": "Obejrzane",
 	"mark_season_watched": "Oznacz sezon jako obejrzany",
 	"unmark_season_watched": "Oznacz sezon jako nieobejrzany",
+	"season_progress_count": "{watched}/{total}",
+	"season_progress_label": "Obejrzano {watched} z {total} odcinków",
+	"season_not_aired": "Jeszcze nie wyemitowany",
+	"show_next_episode": "Następny: S{season}E{episode} · {date}",
+	"show_overview_more": "Więcej",
+	"show_overview_less": "Mniej",
 
 	"calendar_title": "Kalendarz",
 	"calendar_empty": "Brak nadchodzących odcinków lub premier dla śledzonych seriali i filmów.",

@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { ResolvedPathname } from '$app/types';
 	import { afterNavigate } from '$app/navigation';
+	import { m } from '$lib/paraglide/messages';
 	import { tmdbBackdropUrl, tmdbPosterUrl } from '$lib/tmdb-client';
 	import IconChevronLeft from './icons/IconChevronLeft.svelte';
 
@@ -45,6 +46,12 @@
 			history.back();
 		}
 	}
+
+	// Ten lines of synopsis used to push the first episode off the fold on a phone.
+	// Someone opening a show they already track is here to tick a box, not read the
+	// blurb -- so it starts clamped on small screens and opens on demand. Desktop has
+	// the room and shows it in full.
+	let overviewExpanded = $state(false);
 </script>
 
 <div class="relative -mx-4 -mt-6 overflow-hidden rounded-b-panel md:-mx-6 md:-mt-10">
@@ -100,7 +107,25 @@
 	</div>
 {/if}
 
-<p class="mt-5 max-w-3xl text-sm leading-relaxed text-text-muted">{overview}</p>
+{#if overview}
+	<div class="mt-5 max-w-3xl">
+		<p
+			class="text-sm leading-relaxed text-text-muted {overviewExpanded
+				? ''
+				: 'line-clamp-3 sm:line-clamp-none'}"
+		>
+			{overview}
+		</p>
+		<button
+			type="button"
+			class="mt-1 cursor-pointer text-xs font-medium text-accent sm:hidden"
+			aria-expanded={overviewExpanded}
+			onclick={() => (overviewExpanded = !overviewExpanded)}
+		>
+			{overviewExpanded ? m.show_overview_less() : m.show_overview_more()}
+		</button>
+	</div>
+{/if}
 
 {#if children}
 	<div class="mt-5">
