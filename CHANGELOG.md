@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.4.0](https://github.com/kwiniarski97/track/compare/v1.3.0...v1.4.0) (2026-07-16)
+
+
+### Features
+
+* collapse the home page into continue-watching and to-watch ([f4c663a](https://github.com/kwiniarski97/track/commit/f4c663a40e3fd56a659cb20a184bd49c3174bd4d))
+* fall back to original-language episode names for untranslated locales ([7971eae](https://github.com/kwiniarski97/track/commit/7971eaea673861211091fc212107aa5f3f104f7b))
+* make the show page's season list a progress index ([d1e5b5d](https://github.com/kwiniarski97/track/commit/d1e5b5d8cd50b451596b0856da961d074ff475f4))
+* show episode descriptions on the show page ([4a2b998](https://github.com/kwiniarski97/track/commit/4a2b998d914bf6780525f4cfd834cf9384a7b32c))
+
+
+### Bug Fixes
+
+* hide episode descriptions for unreleased episodes ([2b9f84d](https://github.com/kwiniarski97/track/commit/2b9f84d4ba816d067f11d71e6023325321918fa4))
+* stop the watched-episode strikethrough bleeding onto metadata ([581bffc](https://github.com/kwiniarski97/track/commit/581bffca28dd17b3e055f99d0691d8cf019e45aa))
+
 ## [1.3.0](https://github.com/kwiniarski97/track/compare/v1.2.0...v1.3.0) (2026-07-12)
 
 
