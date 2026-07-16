@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { episodes, shows, userTracking, userWatches, users } from '$lib/server/db/schema';
 import { load, type TrackedItem } from './+page.server';
@@ -175,33 +175,47 @@ describe('home page load', () => {
 		await db.delete(users).where(eq(users.id, userId));
 	});
 
-	it('buckets watching shows into categories and lists recently watched', async () => {
+	it('categorises started shows and orders them by urgency, then recency', async () => {
 		const result = (await load({
 			locals: { user: { id: userId } }
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		} as any)) as {
-			watchNext: TrackedItem[];
-			watching: TrackedItem[];
-			notWatchedForAWhile: TrackedItem[];
-			upToDate: TrackedItem[];
-			notStarted: TrackedItem[];
-			recentlyWatched: TrackedItem[];
+			continueWatching: TrackedItem[];
+			toWatch: TrackedItem[];
+			newEpisodeCount: number;
 		};
 
-		expect(result.watchNext.map((w) => w.tmdbId)).toEqual([WATCH_NEXT_ID]);
-		expect(result.upToDate.map((w) => w.tmdbId).sort()).toEqual(
-			[UP_TO_DATE_NO_EPISODES_ID, RECENT_EPISODE_WATCHED_ID].sort()
-		);
-		expect(result.watching.map((w) => w.tmdbId)).toEqual([MID_RANGE_UNWATCHED_ID]);
-		expect(result.notWatchedForAWhile.map((w) => w.tmdbId)).toEqual([STALE_UNWATCHED_ID]);
-		expect(result.notStarted.map((w) => w.tmdbId)).toEqual([NOT_STARTED_ID]);
-
-		// Other fixtures above also log a watch, but 300 days ago -- past the recently-
-		// watched cutoff, so only these two (logged minutes/hours ago) should show up.
-		expect(result.recentlyWatched.map((r) => r.tmdbId)).toEqual([
-			RECENTLY_WATCHED_ID,
-			RECENT_EPISODE_WATCHED_ID
+		expect(result.continueWatching.map((i) => [i.tmdbId, i.category])).toEqual([
+			[WATCH_NEXT_ID, 'watch_next'],
+			[MID_RANGE_UNWATCHED_ID, 'watching'],
+			[STALE_UNWATCHED_ID, 'not_watched_for_a_while'],
+			// The three up-to-date shows tie on category, so most-recently-watched wins:
+			// now, an hour ago, then 300 days ago.
+			[RECENTLY_WATCHED_ID, 'up_to_date'],
+			[RECENT_EPISODE_WATCHED_ID, 'up_to_date'],
+			[UP_TO_DATE_NO_EPISODES_ID, 'up_to_date']
 		]);
+
+		// Tracked as watching but never started, so it belongs with the queue, not the
+		// continue-watching list.
+		expect(result.toWatch.map((i) => i.tmdbId)).toEqual([NOT_STARTED_ID]);
+		expect(result.newEpisodeCount).toBe(1);
+	});
+
+	it('keeps a show with no tracking row out of the list once its last watch ages out', async () => {
+		// RECENTLY_WATCHED_ID is only ever surfaced because it was watched just now; it
+		// has no tracking row to keep it around on its own.
+		await db
+			.update(userWatches)
+			.set({ watchedAt: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000) })
+			.where(and(eq(userWatches.userId, userId), eq(userWatches.tmdbId, RECENTLY_WATCHED_ID)));
+
+		const result = (await load({
+			locals: { user: { id: userId } }
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		} as any)) as { continueWatching: TrackedItem[] };
+
+		expect(result.continueWatching.map((i) => i.tmdbId)).not.toContain(RECENTLY_WATCHED_ID);
 	});
 });
 
@@ -254,12 +268,12 @@ describe('home page load recently watched cutoff', () => {
 		await db.delete(users).where(eq(users.id, userId));
 	});
 
-	it('drops shows last watched more than 90 days ago from recently watched', async () => {
+	it('drops untracked shows last watched more than 90 days ago', async () => {
 		const result = (await load({
 			locals: { user: { id: userId } }
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		} as any)) as { recentlyWatched: TrackedItem[] };
+		} as any)) as { continueWatching: TrackedItem[] };
 
-		expect(result.recentlyWatched.map((r) => r.tmdbId)).toEqual([WITHIN_CUTOFF_ID]);
+		expect(result.continueWatching.map((r) => r.tmdbId)).toEqual([WITHIN_CUTOFF_ID]);
 	});
 });
