@@ -17,29 +17,41 @@
 			: resolve('/movie/[tmdbId]', { tmdbId: String(item.tmdbId) });
 	}
 
-	const isEmpty = $derived(
-		data.watchNext.length === 0 &&
-			data.watching.length === 0 &&
-			data.notWatchedForAWhile.length === 0 &&
-			data.upToDate.length === 0 &&
-			data.notStarted.length === 0 &&
-			data.planToWatch.length === 0 &&
-			data.recentlyWatched.length === 0
-	);
-	// A blurred backdrop of the user's own posters, most-recently-tracked first --
-	// gives the dashboard a personal, cinematic feel instead of a flat header.
+	// The four watching categories ride along on each card instead of splitting the list
+	// into four one-poster sections. Only the urgent one gets the loud accent badge; the
+	// rest stay quiet, and the progress bar already colours caught-up vs behind.
+	function badgeFor(item: TrackedItem): string | null {
+		return item.category === 'watch_next' ? m.home_new_episode_badge() : null;
+	}
+
+	function subtitleFor(item: TrackedItem): string | null {
+		if (item.category === 'not_watched_for_a_while') return m.home_stale_subtitle();
+		if (item.category === 'up_to_date') return m.home_up_to_date_subtitle();
+		return null;
+	}
+
+	const sections = $derived([
+		{ heading: m.home_continue_watching_heading(), items: data.continueWatching, active: true },
+		{ heading: m.home_to_watch_heading(), items: data.toWatch, active: false }
+	]);
+
+	const isEmpty = $derived(data.continueWatching.length === 0 && data.toWatch.length === 0);
+
+	// A blurred backdrop of the user's own posters -- gives the dashboard a personal,
+	// cinematic feel instead of a flat header.
 	const heroPosters = $derived(
-		[
-			...data.watchNext,
-			...data.watching,
-			...data.notWatchedForAWhile,
-			...data.upToDate,
-			...data.notStarted,
-			...data.planToWatch
-		]
+		[...data.continueWatching, ...data.toWatch]
 			.map((item) => tmdbPosterUrl(item.posterPath, 'w185'))
 			.filter((url) => url !== null)
 			.slice(0, 10)
+	);
+
+	// The headline answers the only question this page exists to answer, so it says what
+	// is waiting rather than repeating the app's own name (already in the nav above it).
+	const headline = $derived(
+		data.newEpisodeCount > 0
+			? m.home_new_episodes_count({ count: data.newEpisodeCount })
+			: m.home_all_caught_up()
 	);
 </script>
 
@@ -47,7 +59,7 @@
 
 {#if heroPosters.length > 0}
 	<div class="relative -mx-4 -mt-6 mb-8 overflow-hidden md:-mx-6 md:-mt-10">
-		<div class="relative flex h-36 sm:h-48">
+		<div class="relative flex h-32 sm:h-40">
 			{#each heroPosters as poster (poster)}
 				<img
 					src={poster}
@@ -63,19 +75,13 @@
 		></div>
 		<div class="relative z-10 -mt-8 px-4 pb-5 md:px-6">
 			<h1 class="text-gradient-accent text-2xl font-bold tracking-tight sm:text-3xl">
-				{m.app_name()}
+				{headline}
 			</h1>
-			<p class="mt-1 text-sm text-text-muted">
-				{m.home_signed_in_as({ name: data.user?.name ?? '', email: data.user?.email ?? '' })}
-			</p>
 		</div>
 	</div>
 {:else}
 	<div class="mb-8">
-		<h1 class="text-2xl font-bold tracking-tight text-text sm:text-3xl">{m.app_name()}</h1>
-		<p class="mt-1 text-sm text-text-muted">
-			{m.home_signed_in_as({ name: data.user?.name ?? '', email: data.user?.email ?? '' })}
-		</p>
+		<h1 class="text-2xl font-bold tracking-tight text-text sm:text-3xl">{headline}</h1>
 	</div>
 {/if}
 
@@ -87,125 +93,24 @@
 		cta={{ label: m.home_empty_cta(), href: resolve('/search') }}
 	/>
 {:else}
-	{#if data.recentlyWatched.length > 0}
-		<section class="mb-10">
-			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_recently_watched_heading()}</h2>
-			<PosterGrid>
-				{#each data.recentlyWatched as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard
-						href={hrefFor(item)}
-						title={item.title}
-						posterPath={item.posterPath}
-						progress={item.progress}
-						index={i}
-					/>
-				{/each}
-			</PosterGrid>
-		</section>
-	{/if}
-
-	{#if data.watchNext.length > 0}
-		<section class="mb-10">
-			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_watch_next_heading()}</h2>
-			<PosterGrid>
-				{#each data.watchNext as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard
-						href={hrefFor(item)}
-						title={item.title}
-						posterPath={item.posterPath}
-						badge={m.home_new_episode_badge()}
-						progress={item.progress}
-						index={i}
-					/>
-				{/each}
-			</PosterGrid>
-		</section>
-	{/if}
-
-	{#if data.watching.length > 0}
-		<section class="mb-10">
-			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_watching_heading()}</h2>
-			<PosterGrid>
-				{#each data.watching as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard
-						href={hrefFor(item)}
-						title={item.title}
-						posterPath={item.posterPath}
-						progress={item.progress}
-						index={i}
-					/>
-				{/each}
-			</PosterGrid>
-		</section>
-	{/if}
-
-	{#if data.notWatchedForAWhile.length > 0}
-		<section class="mb-10">
-			<h2 class="mb-3 text-lg font-semibold text-text">
-				{m.home_not_watched_for_a_while_heading()}
-			</h2>
-			<PosterGrid>
-				{#each data.notWatchedForAWhile as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard
-						href={hrefFor(item)}
-						title={item.title}
-						posterPath={item.posterPath}
-						progress={item.progress}
-						index={i}
-					/>
-				{/each}
-			</PosterGrid>
-		</section>
-	{/if}
-
-	{#if data.upToDate.length > 0}
-		<section class="mb-10">
-			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_up_to_date_heading()}</h2>
-			<PosterGrid>
-				{#each data.upToDate as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard
-						href={hrefFor(item)}
-						title={item.title}
-						posterPath={item.posterPath}
-						progress={item.progress}
-						index={i}
-					/>
-				{/each}
-			</PosterGrid>
-		</section>
-	{/if}
-
-	{#if data.notStarted.length > 0}
-		<section class="mb-10">
-			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_not_started_heading()}</h2>
-			<PosterGrid>
-				{#each data.notStarted as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard
-						href={hrefFor(item)}
-						title={item.title}
-						posterPath={item.posterPath}
-						progress={item.progress}
-						index={i}
-					/>
-				{/each}
-			</PosterGrid>
-		</section>
-	{/if}
-
-	{#if data.planToWatch.length > 0}
-		<section class="mb-10">
-			<h2 class="mb-3 text-lg font-semibold text-text">{m.home_plan_to_watch_heading()}</h2>
-			<PosterGrid>
-				{#each data.planToWatch as item, i (item.mediaType + item.tmdbId)}
-					<PosterCard
-						href={hrefFor(item)}
-						title={item.title}
-						posterPath={item.posterPath}
-						progress={item.progress}
-						index={i}
-					/>
-				{/each}
-			</PosterGrid>
-		</section>
-	{/if}
+	{#each sections as section (section.heading)}
+		{#if section.items.length > 0}
+			<section class="mb-10">
+				<h2 class="mb-3 text-lg font-semibold text-text">{section.heading}</h2>
+				<PosterGrid>
+					{#each section.items as item, i (item.mediaType + item.tmdbId)}
+						<PosterCard
+							href={hrefFor(item)}
+							title={item.title}
+							posterPath={item.posterPath}
+							badge={section.active ? badgeFor(item) : null}
+							subtitle={section.active ? subtitleFor(item) : null}
+							progress={item.progress}
+							index={i}
+						/>
+					{/each}
+				</PosterGrid>
+			</section>
+		{/if}
+	{/each}
 {/if}

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	episodes,
@@ -11,18 +11,33 @@ import {
 import { getShowProgress, type ShowProgress } from '$lib/server/media';
 import type { PageServerLoad } from './$types';
 
+export type WatchingCategory = 'watch_next' | 'watching' | 'not_watched_for_a_while' | 'up_to_date';
+
 export interface TrackedItem {
 	mediaType: 'tv' | 'movie';
 	tmdbId: number;
 	title: string;
 	posterPath: string | null;
 	progress?: ShowProgress | null;
+	// Why this item sits where it does in Continue watching. Rendered as a badge//subtitle
+	// rather than its own section: as sections these four split one row of posters across
+	// four headings and repeated whatever Recently watched already showed.
+	category?: WatchingCategory;
 }
 
+// Most urgent first. Ties broken by most-recently-watched, so the list reads as "what to
+// put on tonight" from the top down.
+const CATEGORY_ORDER: Record<WatchingCategory, number> = {
+	watch_next: 0,
+	watching: 1,
+	not_watched_for_a_while: 2,
+	up_to_date: 3
+};
+
 const SECTION_STATUSES: TrackingStatus[] = ['watching', 'plan_to_watch'];
-const RECENTLY_WATCHED_LIMIT = 6;
-// A show whose last watched episode is older than this drops out of Recently Watched
-// entirely, rather than lingering there indefinitely.
+// A show the user watched but isn't tracking as 'watching' (dropped, completed, or only
+// ever synced from Jellyfin) still surfaces in Continue watching if it was watched this
+// recently -- past that it drops off rather than lingering indefinitely.
 const RECENTLY_WATCHED_MAX_AGE_DAYS = 90;
 // How recently an unwatched episode must have aired for a show to land in Watch Next
 // rather than Watching -- the show is otherwise fully caught up, just waiting on the
@@ -31,8 +46,6 @@ const NEW_EPISODE_WINDOW_DAYS = 30;
 // How old the oldest unwatched episode must be before a show is considered stale
 // (Not watched for a while) instead of just currently behind (Watching).
 const STALE_UNWATCHED_DAYS = 180;
-
-type WatchingCategory = 'watch_next' | 'watching' | 'not_watched_for_a_while' | 'up_to_date';
 
 function daysAgoIso(n: number): string {
 	return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -54,8 +67,28 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.where(and(eq(userTracking.userId, userId), inArray(userTracking.status, SECTION_STATUSES)))
 		.orderBy(desc(userTracking.createdAt));
 
-	const showIds = tracking.filter((t) => t.mediaType === 'tv').map((t) => t.tmdbId);
+	const trackedShowIds = tracking.filter((t) => t.mediaType === 'tv').map((t) => t.tmdbId);
 	const movieIds = tracking.filter((t) => t.mediaType === 'movie').map((t) => t.tmdbId);
+
+	// Last watch per series, with no age cutoff -- doubles as the Continue watching sort
+	// key and as the recency test for shows that aren't tracked as 'watching'.
+	const lastWatchedRows = await db
+		.select({
+			tmdbId: userWatches.tmdbId,
+			lastWatchedAt: sql<number>`max(${userWatches.watchedAt})`
+		})
+		.from(userWatches)
+		.where(and(eq(userWatches.userId, userId), eq(userWatches.mediaType, 'tv')))
+		.groupBy(userWatches.tmdbId);
+	const lastWatchedByShowId = new Map(lastWatchedRows.map((r) => [r.tmdbId, r.lastWatchedAt]));
+
+	// Series the user has watched recently but isn't tracking as 'watching'.
+	const recentCutoff = daysAgoEpochSeconds(RECENTLY_WATCHED_MAX_AGE_DAYS);
+	const recentUntrackedShowIds = lastWatchedRows
+		.filter((r) => r.lastWatchedAt >= recentCutoff && !trackedShowIds.includes(r.tmdbId))
+		.map((r) => r.tmdbId);
+
+	const showIds = [...new Set([...trackedShowIds, ...recentUntrackedShowIds])];
 
 	const showRows = showIds.length
 		? await db.select().from(shows).where(inArray(shows.tmdbId, showIds))
@@ -67,13 +100,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const showById = new Map(showRows.map((s) => [s.tmdbId, s]));
 	const movieById = new Map(movieRows.map((mv) => [mv.tmdbId, mv]));
 
-	// Bucket each 'watching' show by progress against what's aired so far. Relies on the
-	// `episodes` cache, which is only populated once someone has opened the show page --
-	// a show that's never been visited has no cached episodes, so it falls back to
-	// "up to date" rather than blocking on data we don't have.
-	const watchingShowIds = tracking
-		.filter((t) => t.mediaType === 'tv' && t.status === 'watching')
-		.map((t) => t.tmdbId);
+	// Bucket each show by progress against what's aired so far. Relies on the `episodes`
+	// cache, which is only populated once someone has opened the show page -- a show
+	// that's never been visited has no cached episodes, so it falls back to "up to date"
+	// rather than blocking on data we don't have.
+	const watchingShowIds = [
+		...new Set([
+			...tracking
+				.filter((t) => t.mediaType === 'tv' && t.status === 'watching')
+				.map((t) => t.tmdbId),
+			...recentUntrackedShowIds
+		])
+	];
 
 	const categoryByShowId = new Map<number, WatchingCategory>();
 	// Shows with at least one logged watch (any season/episode, including specials) --
@@ -156,32 +194,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	}
 
-	// Most-recently-watched distinct series, regardless of tracking status -- a show
-	// dropped or completed can still surface here if an episode was just (re)watched.
-	const recentWatches = await db
-		.select({
-			tmdbId: userWatches.tmdbId,
-			lastWatchedAt: sql<number>`max(${userWatches.watchedAt})`
-		})
-		.from(userWatches)
-		.where(and(eq(userWatches.userId, userId), eq(userWatches.mediaType, 'tv')))
-		.groupBy(userWatches.tmdbId)
-		.having(({ lastWatchedAt }) =>
-			gte(lastWatchedAt, daysAgoEpochSeconds(RECENTLY_WATCHED_MAX_AGE_DAYS))
-		)
-		.orderBy(desc(sql`max(${userWatches.watchedAt})`))
-		.limit(RECENTLY_WATCHED_LIMIT);
-
-	const recentShowIds = recentWatches.map((r) => r.tmdbId);
-	const recentShowRows = recentShowIds.length
-		? await db.select().from(shows).where(inArray(shows.tmdbId, recentShowIds))
-		: [];
-	const recentShowById = new Map(recentShowRows.map((s) => [s.tmdbId, s]));
-
 	// The progress bar's "completed" state needs each show's real tracking status, which
 	// for recently-watched shows may fall outside SECTION_STATUSES (e.g. dropped) or be
 	// missing entirely (watches logged with no tracking row, e.g. via Jellyfin).
-	const progressShowIds = [...new Set([...showIds, ...recentShowIds])];
+	const progressShowIds = showIds;
 	const progressTrackingRows = progressShowIds.length
 		? await db
 				.select({ tmdbId: userTracking.tmdbId, status: userTracking.status })
@@ -224,63 +240,58 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const isTrackedItem = (item: TrackedItem | null): item is TrackedItem => item !== null;
 
-	const recentlyWatched: TrackedItem[] = recentWatches
-		.map((r): TrackedItem | null => {
-			const show = recentShowById.get(r.tmdbId);
-			return show
-				? {
-						mediaType: 'tv',
-						tmdbId: r.tmdbId,
-						title: show.title,
-						posterPath: show.posterPath,
-						progress: progressByShowId.get(r.tmdbId) ?? null
-					}
-				: null;
-		})
-		.filter(isTrackedItem);
-
-	// Movies don't have episodes to reason about, so they always land in the general
-	// Watching bucket alongside shows whose progress doesn't fit a more specific one.
-	const notStarted: TrackedItem[] = [];
-	const watchNext: TrackedItem[] = [];
-	const watching: TrackedItem[] = [];
-	const notWatchedForAWhile: TrackedItem[] = [];
-	const upToDate: TrackedItem[] = [];
-
-	for (const t of tracking.filter((t) => t.status === 'watching')) {
-		const item = toItem(t);
-		if (!item) continue;
-		if (t.mediaType === 'tv' && !startedShowIds.has(t.tmdbId)) {
-			notStarted.push(item);
-			continue;
-		}
-		const category: WatchingCategory =
-			t.mediaType === 'tv' ? (categoryByShowId.get(t.tmdbId) ?? 'watching') : 'watching';
-		switch (category) {
-			case 'watch_next':
-				watchNext.push(item);
-				break;
-			case 'not_watched_for_a_while':
-				notWatchedForAWhile.push(item);
-				break;
-			case 'up_to_date':
-				upToDate.push(item);
-				break;
-			default:
-				watching.push(item);
-		}
+	function showItem(tmdbId: number, category: WatchingCategory): TrackedItem | null {
+		const show = showById.get(tmdbId);
+		return show
+			? {
+					mediaType: 'tv',
+					tmdbId,
+					title: show.title,
+					posterPath: show.posterPath,
+					progress: progressByShowId.get(tmdbId) ?? null,
+					category
+				}
+			: null;
 	}
 
-	return {
-		recentlyWatched,
-		watchNext,
-		watching,
-		notWatchedForAWhile,
-		upToDate,
-		notStarted,
-		planToWatch: tracking
+	// Everything the user has actually started, in one list: series tracked as 'watching'
+	// plus any series they watched recently without tracking. Movies have no episodes to
+	// reason about, so they carry the general 'watching' category.
+	const continueWatching: TrackedItem[] = [
+		...watchingShowIds
+			.filter((tmdbId) => startedShowIds.has(tmdbId))
+			.map((tmdbId) => showItem(tmdbId, categoryByShowId.get(tmdbId) ?? 'watching'))
+			.filter(isTrackedItem),
+		...tracking
+			.filter((t) => t.mediaType === 'movie' && t.status === 'watching')
+			.map(toItem)
+			.filter(isTrackedItem)
+			.map((item) => ({ ...item, category: 'watching' as const }))
+	].sort((a, b) => {
+		const byCategory = CATEGORY_ORDER[a.category!] - CATEGORY_ORDER[b.category!];
+		if (byCategory !== 0) return byCategory;
+		return (lastWatchedByShowId.get(b.tmdbId) ?? 0) - (lastWatchedByShowId.get(a.tmdbId) ?? 0);
+	});
+
+	// Tracked but never started, alongside the explicit plan-to-watch list -- to the user
+	// these are the same thing: something queued up that they haven't begun.
+	const toWatch: TrackedItem[] = [
+		...tracking
+			.filter(
+				(t) => t.status === 'watching' && t.mediaType === 'tv' && !startedShowIds.has(t.tmdbId)
+			)
+			.map(toItem)
+			.filter(isTrackedItem),
+		...tracking
 			.filter((t) => t.status === 'plan_to_watch')
 			.map(toItem)
 			.filter(isTrackedItem)
+	];
+
+	return {
+		continueWatching,
+		toWatch,
+		// Drives the header line: the one thing worth saying above the fold.
+		newEpisodeCount: continueWatching.filter((i) => i.category === 'watch_next').length
 	};
 };

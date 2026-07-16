@@ -103,14 +103,14 @@ test("a show only tracked and watched by one user does not appear in another use
 	});
 	expect(watchResponse.ok()).toBe(true);
 
-	// Sanity check: it does show up in the tracker's own recently watched.
+	// Sanity check: it does show up in the tracker's own continue-watching list.
 	await trackerPage.goto('/');
-	await expect(trackerPage.getByRole('heading', { name: 'Recently watched' })).toBeVisible();
+	await expect(trackerPage.getByRole('heading', { name: 'Continue watching' })).toBeVisible();
 	await expect(trackerPage.getByText(SHOW_TITLE).first()).toBeVisible();
 	await trackerContext.close();
 
 	// TEST_USER never tracked or watched this show -- it must not appear anywhere on
-	// their home page, recently watched or otherwise.
+	// their home page.
 	await signIn(context, baseURL!);
 	const page = await context.newPage();
 	await page.goto('/');
