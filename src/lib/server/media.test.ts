@@ -363,6 +363,8 @@ describe('getShowCachedOrRefresh', () => {
 			overview: 'Cached overview',
 			poster_path: '/cached-poster.jpg',
 			backdrop_path: '/cached-backdrop.jpg',
+			first_air_date: null,
+			next_episode_to_air: null,
 			status: 'Ended',
 			vote_average: 7.5,
 			vote_count: 100,
@@ -370,6 +372,32 @@ describe('getShowCachedOrRefresh', () => {
 				{ season_number: 0, name: 'Specials', episode_count: 1, air_date: null },
 				{ season_number: 1, name: 'Season 1', episode_count: 5, air_date: null }
 			]
+		});
+	});
+
+	it('reconstructs next_episode_to_air from the cached columns', async () => {
+		await seedCachedShow(new Date());
+		await seedCachedSeasons();
+		await db
+			.update(shows)
+			.set({
+				firstAirDate: '2008-01-20',
+				nextEpisodeAirDate: '2030-03-04',
+				nextEpisodeSeasonNumber: 2,
+				nextEpisodeNumber: 7,
+				nextEpisodeName: 'The Return'
+			})
+			.where(eq(shows.tmdbId, SHOW_ID));
+
+		const result = await getShowCachedOrRefresh(SHOW_ID);
+
+		expect(getShowDetails).not.toHaveBeenCalled();
+		expect(result.first_air_date).toBe('2008-01-20');
+		expect(result.next_episode_to_air).toEqual({
+			air_date: '2030-03-04',
+			episode_number: 7,
+			season_number: 2,
+			name: 'The Return'
 		});
 	});
 

@@ -141,7 +141,17 @@ export type ShowSummary = {
 	overview: string;
 	poster_path: string | null;
 	backdrop_path: string | null;
+	first_air_date: string | null;
 	status: string;
+	// Mirrors TMDB's next_episode_to_air. Already cached per-column by the calendar
+	// job; reconstructed here so the show page's hero can name the next episode
+	// without a TMDB round trip.
+	next_episode_to_air: {
+		air_date: string | null;
+		episode_number: number;
+		season_number: number;
+		name: string;
+	} | null;
 	vote_average: number;
 	vote_count: number;
 	seasons: Array<{
@@ -192,7 +202,19 @@ export async function getShowCachedOrRefresh(tmdbId: number): Promise<ShowSummar
 				overview: cached.overview ?? '',
 				poster_path: cached.posterPath,
 				backdrop_path: cached.backdropPath,
+				first_air_date: cached.firstAirDate,
 				status: cached.status,
+				// The season/episode numbers are written together with the air date, so a
+				// non-null air date is enough to treat the whole group as present.
+				next_episode_to_air:
+					cached.nextEpisodeAirDate !== null
+						? {
+								air_date: cached.nextEpisodeAirDate,
+								episode_number: cached.nextEpisodeNumber ?? 0,
+								season_number: cached.nextEpisodeSeasonNumber ?? 0,
+								name: cached.nextEpisodeName ?? ''
+							}
+						: null,
 				vote_average: cached.voteAverage,
 				vote_count: cached.voteCount,
 				seasons: seasonRows.map((s) => ({
