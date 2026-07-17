@@ -14,21 +14,25 @@ interface RevealOptions {
 	delay?: number;
 }
 
+/** Cascade delay stops growing past this many items, so a big grid's tail settles in
+ * bounded time instead of the last row lagging seconds behind the first. */
+const REVEAL_STAGGER_CAP = 8;
+
 /** Svelte action: fades/slides an element in on mount. Renders in its final state
  * instantly when the user has requested reduced motion. */
 export function reveal(node: HTMLElement, options: RevealOptions = {}) {
 	if (reducedMotion()) return {};
 
-	const { index = 0, y = 14, stagger = 0.04, delay = 0 } = options;
+	const { index = 0, y = 14, stagger = 0.02, delay = 0 } = options;
 	gsap.fromTo(
 		node,
 		{ opacity: 0, y },
 		{
 			opacity: 1,
 			y: 0,
-			duration: 0.5,
-			delay: delay + index * stagger,
-			ease: 'power3.out'
+			duration: 0.32,
+			delay: delay + Math.min(index, REVEAL_STAGGER_CAP) * stagger,
+			ease: 'power2.out'
 		}
 	);
 	return {};
