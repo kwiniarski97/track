@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/kwiniarski97/track/compare/v1.4.0...v1.5.0) (2026-07-17)
+
+
+### Features
+
+* speed up poster grid reveal animation ([c62180a](https://github.com/kwiniarski97/track/commit/c62180a53852941fb96c235e5b382ba6679b7148))
+
 ## [1.4.0](https://github.com/kwiniarski97/track/compare/v1.3.0...v1.4.0) (2026-07-16)
 
 
