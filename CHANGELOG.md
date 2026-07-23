@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/kwiniarski97/track/compare/v1.5.0...v1.5.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* don't show waiting-for-episode subtitle on completed shows ([ec6b729](https://github.com/kwiniarski97/track/commit/ec6b7297d8ac916f6fd205ce17475505ded942f6))
+
 ## [1.5.0](https://github.com/kwiniarski97/track/compare/v1.4.0...v1.5.0) (2026-07-17)
 
 
