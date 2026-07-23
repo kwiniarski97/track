@@ -26,7 +26,13 @@
 
 	function subtitleFor(item: TrackedItem): string | null {
 		if (item.category === 'not_watched_for_a_while') return m.home_stale_subtitle();
-		if (item.category === 'up_to_date') return m.home_up_to_date_subtitle();
+		// A show that has ended and been fully watched is 'up_to_date' same as an ongoing
+		// show that's just caught up, but there's no next episode coming -- the progress
+		// bar's 'completed' state (rainbow) already tells that story, so don't also claim
+		// the show is waiting on something that will never air.
+		if (item.category === 'up_to_date' && item.progress?.state !== 'completed') {
+			return m.home_up_to_date_subtitle();
+		}
 		return null;
 	}
 
