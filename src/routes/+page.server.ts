@@ -83,6 +83,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const today = daysAgoIso(0);
 		const newEpisodeWindowStart = daysAgoIso(NEW_EPISODE_WINDOW_DAYS);
 		const staleThreshold = daysAgoIso(STALE_UNWATCHED_DAYS);
+		const staleActivityCutoff = new Date(Date.now() - STALE_UNWATCHED_DAYS * 24 * 60 * 60 * 1000);
 
 		const airedEpisodeRows = await db
 			.select({
@@ -105,7 +106,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.select({
 				tmdbId: userWatches.tmdbId,
 				seasonNumber: userWatches.seasonNumber,
-				episodeNumber: userWatches.episodeNumber
+				episodeNumber: userWatches.episodeNumber,
+				watchedAt: userWatches.watchedAt
 			})
 			.from(userWatches)
 			.where(
@@ -121,7 +123,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const watchedSet = new Set(
 			watchesForWatchingShows.map((w) => watchedKey(w.tmdbId, w.seasonNumber, w.episodeNumber))
 		);
-		for (const w of watchesForWatchingShows) startedShowIds.add(w.tmdbId);
+		// Last time the user watched *anything* from the show -- used below so a stale
+		// backlog gap doesn't outweigh watch activity that's actually recent.
+		const lastWatchedAtByShowId = new Map<number, Date>();
+		for (const w of watchesForWatchingShows) {
+			startedShowIds.add(w.tmdbId);
+			const current = lastWatchedAtByShowId.get(w.tmdbId);
+			if (!current || w.watchedAt > current) lastWatchedAtByShowId.set(w.tmdbId, w.watchedAt);
+		}
 
 		const airedByShowId = new Map<number, typeof airedEpisodeRows>();
 		for (const ep of airedEpisodeRows) {
@@ -146,9 +155,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 				unwatched[0].airDate!
 			);
 
+			const lastWatchedAt = lastWatchedAtByShowId.get(tmdbId);
+			const hasRecentActivity = !!lastWatchedAt && lastWatchedAt >= staleActivityCutoff;
+
 			if (oldestUnwatchedAirDate >= newEpisodeWindowStart) {
 				categoryByShowId.set(tmdbId, 'watch_next');
-			} else if (oldestUnwatchedAirDate < staleThreshold) {
+			} else if (oldestUnwatchedAirDate < staleThreshold && !hasRecentActivity) {
 				categoryByShowId.set(tmdbId, 'not_watched_for_a_while');
 			} else {
 				categoryByShowId.set(tmdbId, 'watching');
