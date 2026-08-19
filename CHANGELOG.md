@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/kwiniarski97/track/compare/v1.5.2...v1.5.3) (2026-08-19)
+
+
+### Bug Fixes
+
+* keep recently watched shows out of the stale bucket ([a2fd772](https://github.com/kwiniarski97/track/commit/a2fd772ac2a69837dfa9755b63c5dd7327ed3ab2))
+
 ## [1.5.2](https://github.com/kwiniarski97/track/compare/v1.5.1...v1.5.2) (2026-08-19)
 
 
