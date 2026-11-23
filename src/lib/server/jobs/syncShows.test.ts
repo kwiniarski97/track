@@ -88,6 +88,7 @@ describe('syncShows job', () => {
 		otherUserId = o.id;
 	});
 	afterEach(async () => {
+		vi.restoreAllMocks();
 		await db.delete(calendarEntries).where(inArray(calendarEntries.tmdbId, IDS));
 		await db.delete(userWatches).where(inArray(userWatches.tmdbId, IDS));
 		await db.delete(userTracking).where(inArray(userTracking.tmdbId, IDS));
@@ -172,7 +173,6 @@ describe('syncShows job', () => {
 				'[syncShows] failed to sync show 999051',
 				expect.any(Error)
 			);
-			vi.restoreAllMocks();
 		});
 
 		it('flips a fully watched show to completed once the sync learns it Ended', async () => {

@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { TMDB_TIMEOUT_MS } from '$lib/server/tmdb';
 import { tmdbPosterUrl } from '$lib/tmdb-client';
 import { hslToHex, rgbToHsl } from '$lib/color';
 
@@ -9,7 +10,7 @@ async function averagePosterRgb(posterPath: string): Promise<[number, number, nu
 	const url = tmdbPosterUrl(posterPath, 'w200');
 	if (!url) return null;
 
-	const response = await fetch(url);
+	const response = await fetch(url, { signal: AbortSignal.timeout(TMDB_TIMEOUT_MS) });
 	if (!response.ok) return null;
 
 	const buffer = Buffer.from(await response.arrayBuffer());
