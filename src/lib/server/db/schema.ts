@@ -64,6 +64,9 @@ export const shows = sqliteTable('shows', {
 	nextEpisodeSeasonNumber: integer('next_episode_season_number'),
 	nextEpisodeNumber: integer('next_episode_number'),
 	nextEpisodeName: text('next_episode_name'),
+	originalLanguage: text('original_language'),
+	// Last full sync of details, seasons and episodes; null means never synced.
+	syncedAt: integer('synced_at', { mode: 'timestamp' }),
 	updatedAt: integer('updated_at', { mode: 'timestamp' })
 		.notNull()
 		.$defaultFn(() => new Date())

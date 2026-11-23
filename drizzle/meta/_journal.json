@@ -50,6 +50,13 @@
       "when": 1784152106540,
       "tag": "0006_dusty_whistler",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795430852527,
+      "tag": "0007_greedy_human_cannonball",
+      "breakpoints": true
     }
   ]
 }
