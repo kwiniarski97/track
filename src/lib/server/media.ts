@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lte, notInArray, sql } from 'drizzle-orm';
 import { db } from './db';
 import {
 	episodes,
@@ -12,26 +12,27 @@ import {
 import {
 	getMovieDetails,
 	getShowDetails,
+	getShowWithSeasons,
 	type TmdbMovieDetails,
 	type TmdbShowDetails
 } from './tmdb';
 import { extractPosterColor } from './poster-color';
 
-async function upsertShow(details: TmdbShowDetails): Promise<void> {
+/** Only re-derive the color when the poster actually changed (or we've never
+ * computed one) -- it costs a network fetch + image decode, so skip it on the
+ * common case of re-caching a show whose poster hasn't moved. */
+async function resolvePosterColor(details: TmdbShowDetails): Promise<string | null> {
 	const [existing] = await db
 		.select({ posterPath: shows.posterPath, posterColor: shows.posterColor })
 		.from(shows)
 		.where(eq(shows.tmdbId, details.id));
+	return existing && existing.posterPath === details.poster_path && existing.posterColor
+		? existing.posterColor
+		: await extractPosterColor(details.poster_path);
+}
 
-	// Only re-derive the color when the poster actually changed (or we've never
-	// computed one) -- it costs a network fetch + image decode, so skip it on the
-	// common case of re-caching a show whose poster hasn't moved.
-	const posterColor =
-		existing && existing.posterPath === details.poster_path && existing.posterColor
-			? existing.posterColor
-			: await extractPosterColor(details.poster_path);
-
-	const values = {
+function showValues(details: TmdbShowDetails, posterColor: string | null) {
+	return {
 		tmdbId: details.id,
 		title: details.name,
 		posterPath: details.poster_path,
@@ -42,11 +43,16 @@ async function upsertShow(details: TmdbShowDetails): Promise<void> {
 		overview: details.overview,
 		firstAirDate: details.first_air_date,
 		status: details.status,
+		originalLanguage: details.original_language,
 		nextEpisodeAirDate: details.next_episode_to_air?.air_date ?? null,
 		nextEpisodeSeasonNumber: details.next_episode_to_air?.season_number ?? null,
 		nextEpisodeNumber: details.next_episode_to_air?.episode_number ?? null,
 		nextEpisodeName: details.next_episode_to_air?.name ?? null
 	};
+}
+
+async function upsertShow(details: TmdbShowDetails): Promise<void> {
+	const values = showValues(details, await resolvePosterColor(details));
 	await db
 		.insert(shows)
 		.values(values)
@@ -100,6 +106,107 @@ export async function cacheShowSeasons(tmdbId: number, details: TmdbShowDetails)
 				}
 			});
 	}
+}
+
+/** Fetches a show's details, seasons and episodes from TMDB and writes the whole snapshot
+ * in one transaction, stamping `synced_at`. Throws on a TMDB failure before touching the
+ * db. All awaits happen before the transaction: better-sqlite3 transactions are
+ * synchronous, so the callback must not be async. */
+export async function syncShow(tmdbId: number): Promise<void> {
+	const cached = await db
+		.select({ seasonNumber: seasons.seasonNumber })
+		.from(seasons)
+		.where(eq(seasons.showTmdbId, tmdbId))
+		.orderBy(asc(seasons.seasonNumber));
+	const { details, seasons: seasonPayloads } = await getShowWithSeasons(
+		tmdbId,
+		cached.map((s) => s.seasonNumber)
+	);
+	const posterColor = await resolvePosterColor(details);
+
+	const values = showValues(details, posterColor);
+	const now = new Date();
+	const seasonValues = details.seasons.map((season) => ({
+		showTmdbId: tmdbId,
+		seasonNumber: season.season_number,
+		name: season.name,
+		episodeCount: season.episode_count,
+		airDate: season.air_date
+	}));
+
+	db.transaction((tx) => {
+		tx.insert(shows)
+			.values({ ...values, syncedAt: now })
+			.onConflictDoUpdate({
+				target: shows.tmdbId,
+				set: { ...values, syncedAt: now, updatedAt: now }
+			})
+			.run();
+
+		for (const batch of chunk(seasonValues, UPSERT_CHUNK_SIZE)) {
+			tx.insert(seasons)
+				.values(batch)
+				.onConflictDoUpdate({
+					target: [seasons.showTmdbId, seasons.seasonNumber],
+					set: {
+						name: sql`excluded.name`,
+						episodeCount: sql`excluded.episode_count`,
+						airDate: sql`excluded.air_date`
+					}
+				})
+				.run();
+		}
+
+		// Only seasons TMDB actually returned are touched; an omitted season keeps its cache.
+		for (const [seasonNumber, payload] of seasonPayloads) {
+			const episodeValues = payload.episodes.map((ep) => ({
+				showTmdbId: tmdbId,
+				seasonNumber,
+				episodeNumber: ep.episode_number,
+				title: ep.name,
+				overview: ep.overview ?? '',
+				airDate: ep.air_date,
+				runtime: ep.runtime,
+				stillPath: ep.still_path,
+				voteAverage: ep.vote_average,
+				voteCount: ep.vote_count
+			}));
+			for (const batch of chunk(episodeValues, UPSERT_CHUNK_SIZE)) {
+				tx.insert(episodes)
+					.values(batch)
+					.onConflictDoUpdate({
+						target: [episodes.showTmdbId, episodes.seasonNumber, episodes.episodeNumber],
+						set: {
+							title: sql`excluded.title`,
+							overview: sql`excluded.overview`,
+							airDate: sql`excluded.air_date`,
+							runtime: sql`excluded.runtime`,
+							stillPath: sql`excluded.still_path`,
+							voteAverage: sql`excluded.vote_average`,
+							voteCount: sql`excluded.vote_count`
+						}
+					})
+					.run();
+			}
+			const inSeason = and(
+				eq(episodes.showTmdbId, tmdbId),
+				eq(episodes.seasonNumber, seasonNumber)
+			);
+			tx.delete(episodes)
+				.where(
+					episodeValues.length === 0
+						? inSeason
+						: and(
+								inSeason,
+								notInArray(
+									episodes.episodeNumber,
+									episodeValues.map((e) => e.episodeNumber)
+								)
+							)
+				)
+				.run();
+		}
+	});
 }
 
 async function upsertMovie(details: TmdbMovieDetails): Promise<void> {
