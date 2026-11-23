@@ -11,13 +11,15 @@ import {
 	users,
 	type TrackingStatus
 } from './db/schema';
-import { getShowDetails, getMovieDetails } from './tmdb';
-import type { TmdbMovieDetails, TmdbShowDetails } from './tmdb';
+import { getShowDetails, getMovieDetails, getShowWithSeasons } from './tmdb';
+import type { TmdbMovieDetails, TmdbSeasonDetails, TmdbShowDetails } from './tmdb';
+import { extractPosterColor } from './poster-color';
 import {
 	MEDIA_CACHE_TTL_MS,
 	getMovieCachedOrRefresh,
 	getShowCachedOrRefresh,
 	getShowProgress,
+	syncShow,
 	syncShowCompletion
 } from './media';
 
@@ -27,7 +29,8 @@ import {
 vi.mock('./tmdb', async (importOriginal) => ({
 	...(await importOriginal<typeof import('./tmdb')>()),
 	getShowDetails: vi.fn(),
-	getMovieDetails: vi.fn()
+	getMovieDetails: vi.fn(),
+	getShowWithSeasons: vi.fn()
 }));
 // extractPosterColor downloads the poster image on the refresh path -- stub it out.
 vi.mock('./poster-color', () => ({
@@ -524,5 +527,162 @@ describe('getMovieCachedOrRefresh', () => {
 
 		expect(getMovieDetails).toHaveBeenCalledTimes(1);
 		expect(result.title).toBe('Fresh Movie');
+	});
+});
+
+describe('syncShow', () => {
+	const ID = 999041;
+
+	function ep(n: number, name = `S?E${n}`, air = '2020-02-02') {
+		return {
+			episode_number: n,
+			name,
+			overview: 'o',
+			air_date: air,
+			runtime: 40,
+			still_path: null,
+			vote_average: 7,
+			vote_count: 3
+		};
+	}
+	function season(s: number, count = 2): TmdbSeasonDetails {
+		return {
+			episodes: Array.from({ length: count }, (_, i) => ep(i + 1, `S${s}E${i + 1}`))
+		};
+	}
+	function details(seasonNumbers = [1, 2]): TmdbShowDetails {
+		return {
+			id: ID,
+			name: 'Synced Show',
+			original_language: 'en',
+			overview: 'ov',
+			poster_path: '/p.jpg',
+			backdrop_path: '/b.jpg',
+			first_air_date: '2020-01-01',
+			status: 'Returning Series',
+			next_episode_to_air: null,
+			seasons: seasonNumbers.map((n) => ({
+				season_number: n,
+				name: `Season ${n}`,
+				episode_count: 2,
+				air_date: '2020-01-01'
+			})),
+			vote_average: 8,
+			vote_count: 10
+		};
+	}
+	function mockTmdb(seasonMap: Array<[number, TmdbSeasonDetails]>, seasonNumbers = [1, 2]) {
+		vi.mocked(getShowWithSeasons).mockResolvedValue({
+			details: details(seasonNumbers),
+			seasons: new Map(seasonMap)
+		});
+	}
+	async function seedShow(extra: Partial<typeof shows.$inferInsert> = {}) {
+		await db.insert(shows).values({ tmdbId: ID, title: 'Old Title', ...extra });
+	}
+	async function seedEp(s: number, e: number, extra: Partial<typeof episodes.$inferInsert> = {}) {
+		await db.insert(episodes).values({
+			showTmdbId: ID,
+			seasonNumber: s,
+			episodeNumber: e,
+			title: `old ${s}x${e}`,
+			...extra
+		});
+	}
+	async function seedSeason(n: number) {
+		await db.insert(seasons).values({ showTmdbId: ID, seasonNumber: n, name: `Old ${n}` });
+	}
+	const epRows = () => db.select().from(episodes).where(eq(episodes.showTmdbId, ID));
+
+	beforeEach(() => {
+		vi.mocked(getShowWithSeasons).mockReset();
+		vi.mocked(extractPosterColor).mockClear();
+	});
+	afterEach(async () => {
+		await db.delete(episodes).where(eq(episodes.showTmdbId, ID));
+		await db.delete(seasons).where(eq(seasons.showTmdbId, ID));
+		await db.delete(shows).where(eq(shows.tmdbId, ID));
+	});
+
+	it('upserts show, seasons and episodes and stamps synced_at and original_language', async () => {
+		mockTmdb([
+			[1, season(1)],
+			[2, season(2)]
+		]);
+		await syncShow(ID);
+
+		const [row] = await db.select().from(shows).where(eq(shows.tmdbId, ID));
+		expect(row.title).toBe('Synced Show');
+		expect(Date.now() - row.syncedAt!.getTime()).toBeLessThan(5000);
+		expect(row.originalLanguage).toBe('en');
+		expect(await db.select().from(seasons).where(eq(seasons.showTmdbId, ID))).toHaveLength(2);
+		expect(await epRows()).toHaveLength(4);
+	});
+
+	it('passes cached season numbers as known seasons', async () => {
+		await seedShow();
+		await seedSeason(2);
+		await seedSeason(1);
+		mockTmdb([]);
+		await syncShow(ID);
+		expect(getShowWithSeasons).toHaveBeenCalledWith(ID, [1, 2]);
+	});
+
+	it('updates titles and air dates of episodes already cached', async () => {
+		await seedShow();
+		await seedSeason(1);
+		await seedEp(1, 1, { title: 'Old', airDate: '2020-01-01' });
+		mockTmdb([[1, season(1)]], [1]);
+		await syncShow(ID);
+		const e = (await epRows()).find((r) => r.seasonNumber === 1 && r.episodeNumber === 1)!;
+		expect(e.title).toBe('S1E1');
+		expect(e.airDate).toBe('2020-02-02');
+	});
+
+	it('deletes episodes of a synced season that TMDB no longer returns', async () => {
+		await seedShow();
+		await seedEp(1, 3);
+		await seedEp(2, 1);
+		mockTmdb([[1, season(1)]], [1]);
+		await syncShow(ID);
+		const rows = await epRows();
+		expect(rows.find((r) => r.seasonNumber === 1 && r.episodeNumber === 3)).toBeUndefined();
+		expect(rows.filter((r) => r.seasonNumber === 2)).toHaveLength(1);
+	});
+
+	it('keeps cached episodes of a season whose payload TMDB omitted', async () => {
+		await seedShow();
+		await seedEp(2, 1);
+		await seedEp(2, 2);
+		mockTmdb([[1, season(1)]], [1, 2]);
+		await syncShow(ID);
+		expect((await epRows()).filter((r) => r.seasonNumber === 2)).toHaveLength(2);
+	});
+
+	it('handles a season with no episodes announced', async () => {
+		await seedShow();
+		await seedEp(3, 1);
+		await seedEp(3, 2);
+		mockTmdb([[3, { episodes: [] }]], [3]);
+		await expect(syncShow(ID)).resolves.toBeUndefined();
+		expect((await epRows()).filter((r) => r.seasonNumber === 3)).toHaveLength(0);
+	});
+
+	it('keeps the poster color when the poster is unchanged', async () => {
+		await seedShow({ posterPath: '/p.jpg', posterColor: '#123456' });
+		mockTmdb([[1, season(1)]], [1]);
+		await syncShow(ID);
+		expect(extractPosterColor).not.toHaveBeenCalled();
+		const [row] = await db.select().from(shows).where(eq(shows.tmdbId, ID));
+		expect(row.posterColor).toBe('#123456');
+	});
+
+	it('leaves the db untouched when TMDB fails', async () => {
+		await seedShow();
+		vi.mocked(getShowWithSeasons).mockRejectedValue(new Error('timeout'));
+		await expect(syncShow(ID)).rejects.toThrow('timeout');
+		const [row] = await db.select().from(shows).where(eq(shows.tmdbId, ID));
+		expect(row.syncedAt).toBeNull();
+		expect(row.title).toBe('Old Title');
 	});
 });
