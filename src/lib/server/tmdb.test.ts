@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getSeasonDetails, getShowDetails, getShowWithSeasons } from './tmdb';
+import { getShowDetails, getShowWithSeasons } from './tmdb';
 
 // TMDB is queried in pl-PL; when an episode has no Polish translation the API returns
 // a locale placeholder ("Odcinek 5") instead of the episode's real name. These tests
@@ -48,7 +48,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe('getSeasonDetails', () => {
+describe('getShowWithSeasons episode name/overview fallback', () => {
 	const episode = (episode_number: number, name: string, overview = `Opis ${episode_number}`) => ({
 		episode_number,
 		name,
@@ -60,16 +60,38 @@ describe('getSeasonDetails', () => {
 		vote_count: 10
 	});
 
-	it('returns Polish names as-is without extra requests when fully translated', async () => {
-		mockTmdb([
-			{
-				path: '/tv/100/season/1',
-				language: 'pl-PL',
-				data: { episodes: [episode(1, 'Rok 3000'), episode(2, 'Lądowanie')] }
-			}
-		]);
+	/** A /tv/100 payload with one season (1) holding `episodes`. */
+	const showWithSeason = (episodes: ReturnType<typeof episode>[]) => ({
+		id: 100,
+		name: 'Show',
+		original_language: 'ja',
+		overview: '',
+		poster_path: null,
+		backdrop_path: null,
+		first_air_date: '2024-01-01',
+		status: 'Returning Series',
+		next_episode_to_air: null,
+		seasons: [{ season_number: 1, name: 'Season 1', episode_count: 1, air_date: null }],
+		vote_average: 7,
+		vote_count: 10,
+		'season/1': { episodes }
+	});
+	const polish = (episodes: ReturnType<typeof episode>[]) => ({
+		path: '/tv/100',
+		language: 'pl-PL',
+		data: showWithSeason(episodes)
+	});
+	const original = (episodes: ReturnType<typeof episode>[]) => ({
+		path: '/tv/100',
+		language: 'ja',
+		data: showWithSeason(episodes)
+	});
+	const season1 = async () => (await getShowWithSeasons(100, [1])).seasons.get(1)!;
 
-		const result = await getSeasonDetails(100, 1);
+	it('returns Polish names as-is without extra requests when fully translated', async () => {
+		mockTmdb([polish([episode(1, 'Rok 3000'), episode(2, 'Lądowanie')])]);
+
+		const result = await season1();
 
 		expect(result.episodes.map((e) => e.name)).toEqual(['Rok 3000', 'Lądowanie']);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -77,73 +99,39 @@ describe('getSeasonDetails', () => {
 
 	it('replaces "Odcinek N" placeholders and empty names with original-language names', async () => {
 		mockTmdb([
-			{
-				path: '/tv/100/season/1',
-				language: 'pl-PL',
-				data: {
-					episodes: [episode(1, 'Odcinek 1'), episode(2, 'Prawdziwa nazwa'), episode(3, '')]
-				}
-			},
-			{ path: '/tv/100', language: 'pl-PL', data: { original_language: 'ja' } },
-			{
-				path: '/tv/100/season/1',
-				language: 'ja',
-				data: { episodes: [episode(1, '第1話'), episode(2, 'ignored'), episode(3, '第3話')] }
-			}
+			polish([episode(1, 'Odcinek 1'), episode(2, 'Prawdziwa nazwa'), episode(3, '')]),
+			original([episode(1, '第1話'), episode(2, 'ignored'), episode(3, '第3話')])
 		]);
 
-		const result = await getSeasonDetails(100, 1);
+		const result = await season1();
 
 		expect(result.episodes.map((e) => e.name)).toEqual(['第1話', 'Prawdziwa nazwa', '第3話']);
 	});
 
 	it('does not treat a real name that only mentions its own number as a placeholder', async () => {
-		mockTmdb([
-			{
-				path: '/tv/100/season/1',
-				language: 'pl-PL',
-				data: { episodes: [episode(5, 'Odcinek 5: Finał')] }
-			}
-		]);
+		mockTmdb([polish([episode(5, 'Odcinek 5: Finał')])]);
 
-		const result = await getSeasonDetails(100, 1);
+		const result = await season1();
 
 		expect(result.episodes[0].name).toBe('Odcinek 5: Finał');
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('exposes episode overviews', async () => {
-		mockTmdb([
-			{
-				path: '/tv/100/season/1',
-				language: 'pl-PL',
-				data: { episodes: [episode(1, 'Rok 3000', 'Załoga budzi się w roku 3000.')] }
-			}
-		]);
+		mockTmdb([polish([episode(1, 'Rok 3000', 'Załoga budzi się w roku 3000.')])]);
 
-		const result = await getSeasonDetails(100, 1);
+		const result = await season1();
 
 		expect(result.episodes[0].overview).toBe('Załoga budzi się w roku 3000.');
 	});
 
 	it('fills a missing Polish overview from the original language', async () => {
 		mockTmdb([
-			{
-				path: '/tv/100/season/1',
-				language: 'pl-PL',
-				data: { episodes: [episode(1, 'Prawdziwa nazwa', ''), episode(2, 'Inna nazwa')] }
-			},
-			{ path: '/tv/100', language: 'pl-PL', data: { original_language: 'ja' } },
-			{
-				path: '/tv/100/season/1',
-				language: 'ja',
-				data: {
-					episodes: [episode(1, '第1話', 'Original overview'), episode(2, '第2話', 'ignored')]
-				}
-			}
+			polish([episode(1, 'Prawdziwa nazwa', ''), episode(2, 'Inna nazwa')]),
+			original([episode(1, '第1話', 'Original overview'), episode(2, '第2話', 'ignored')])
 		]);
 
-		const result = await getSeasonDetails(100, 1);
+		const result = await season1();
 
 		expect(result.episodes.map((e) => e.overview)).toEqual(['Original overview', 'Opis 2']);
 		// Translated names stay even though the original season was fetched for overviews.
@@ -152,41 +140,20 @@ describe('getSeasonDetails', () => {
 
 	it('fills both the name and overview of an untranslated episode', async () => {
 		mockTmdb([
-			{
-				path: '/tv/100/season/1',
-				language: 'pl-PL',
-				data: { episodes: [episode(1, 'Odcinek 1', '')] }
-			},
-			{ path: '/tv/100', language: 'pl-PL', data: { original_language: 'ja' } },
-			{
-				path: '/tv/100/season/1',
-				language: 'ja',
-				data: { episodes: [episode(1, '第1話', 'Original overview')] }
-			}
+			polish([episode(1, 'Odcinek 1', '')]),
+			original([episode(1, '第1話', 'Original overview')])
 		]);
 
-		const result = await getSeasonDetails(100, 1);
+		const result = await season1();
 
 		expect(result.episodes[0].name).toBe('第1話');
 		expect(result.episodes[0].overview).toBe('Original overview');
 	});
 
 	it('keeps the placeholder when the original language has no name either', async () => {
-		mockTmdb([
-			{
-				path: '/tv/100/season/1',
-				language: 'pl-PL',
-				data: { episodes: [episode(1, 'Odcinek 1')] }
-			},
-			{ path: '/tv/100', language: 'pl-PL', data: { original_language: 'ja' } },
-			{
-				path: '/tv/100/season/1',
-				language: 'ja',
-				data: { episodes: [episode(1, '')] }
-			}
-		]);
+		mockTmdb([polish([episode(1, 'Odcinek 1')]), original([episode(1, '')])]);
 
-		const result = await getSeasonDetails(100, 1);
+		const result = await season1();
 
 		expect(result.episodes[0].name).toBe('Odcinek 1');
 	});
