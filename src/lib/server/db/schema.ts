@@ -97,8 +97,8 @@ export const episodes = sqliteTable(
 		seasonNumber: integer('season_number').notNull(),
 		episodeNumber: integer('episode_number').notNull(),
 		title: text('title').notNull(),
-		// Null means "cached before this column existed" and triggers a season refetch;
-		// TMDB itself returns '' when an episode simply has no overview.
+		// Nullable only for rows cached before this column existed (nothing refetches them
+		// on null any more); TMDB itself returns '' when an episode simply has no overview.
 		overview: text('overview'),
 		airDate: text('air_date'),
 		runtime: integer('runtime'),
