@@ -349,6 +349,22 @@ describe('show page load', () => {
 		expect(cached).toHaveLength(4);
 	});
 
+	it('renders a never-synced show with no seasons and does not re-sync it on the next load', async () => {
+		vi.mocked(getShowWithSeasons).mockResolvedValue({
+			details: { ...SHOW_DETAILS, seasons: [] },
+			seasons: new Map()
+		});
+
+		const first = await runLoad();
+		expect(first.show.name).toBe('Fresh Show');
+		expect(first.show.seasons).toEqual([]);
+		expect(getShowWithSeasons).toHaveBeenCalledTimes(1);
+
+		const second = await runLoad();
+		expect(second.show.seasons).toEqual([]);
+		expect(getShowWithSeasons).toHaveBeenCalledTimes(1);
+	});
+
 	it('serves the cached row when the first sync of an imported show fails', async () => {
 		await seedFreshCache(new Date(), null);
 		vi.mocked(getShowWithSeasons).mockRejectedValue(new Error('TMDB down'));

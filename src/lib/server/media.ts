@@ -17,6 +17,7 @@ import {
 	type TmdbShowDetails
 } from './tmdb';
 import { extractPosterColor } from './poster-color';
+import { chunk } from './concurrency';
 
 /** Only re-derive the color when the poster actually changed (or we've never
  * computed one) -- it costs a network fetch + image decode, so skip it on the
@@ -71,12 +72,6 @@ export async function refreshShow(tmdbId: number): Promise<TmdbShowDetails> {
  * comfortably under SQLite's bound-parameter limit while still cutting a per-row loop
  * down to a handful of statements. */
 export const UPSERT_CHUNK_SIZE = 100;
-
-export function chunk<T>(items: T[], size: number): T[][] {
-	const chunks: T[][] = [];
-	for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
-	return chunks;
-}
 
 /** Upserts per-season episode counts, which drive both the show page's season list
  * and syncShowCompletion's "has everything been watched" total. */
@@ -303,14 +298,15 @@ export async function isShowFollowed(tmdbId: number): Promise<boolean> {
 	return !!row;
 }
 
-/** Rebuilds the page payload from the db alone. Null when there is no row or no season
- * rows (e.g. written by the calendar job or import), since the page can't render without
- * a season list. */
+/** Rebuilds the page payload from the db alone. Null when there is no row, or when the
+ * row was never synced and has no season rows (e.g. written by the calendar job or import),
+ * since the page can't render without a season list. A synced snapshot with zero seasons
+ * is legitimate (announced shows) and yields an empty list. */
 async function readShowSummary(tmdbId: number): Promise<ShowSummary | null> {
 	const [cached] = await db.select().from(shows).where(eq(shows.tmdbId, tmdbId));
 	if (!cached) return null;
 	const seasonRows = await db.select().from(seasons).where(eq(seasons.showTmdbId, tmdbId));
-	if (seasonRows.length === 0) return null;
+	if (seasonRows.length === 0 && !cached.syncedAt) return null;
 	return {
 		id: cached.tmdbId,
 		name: cached.title,
@@ -362,8 +358,8 @@ export async function getShowForPage(tmdbId: number): Promise<ShowSummary> {
 				console.error(`Re-sync of unfollowed show ${tmdbId} failed, serving cache`, err);
 			}
 		}
-		const summary = await readShowSummary(tmdbId);
-		if (summary) return summary;
+		// A synced row always has a summary, even with zero seasons.
+		return (await readShowSummary(tmdbId))!;
 	}
 
 	try {
@@ -376,9 +372,8 @@ export async function getShowForPage(tmdbId: number): Promise<ShowSummary> {
 		}
 		throw err;
 	}
-	const summary = await readShowSummary(tmdbId);
-	if (!summary) throw new Error(`Show ${tmdbId} has no seasons after sync`);
-	return summary;
+	// syncShow stamps synced_at, so the summary exists even when TMDB lists no seasons.
+	return (await readShowSummary(tmdbId))!;
 }
 
 /** Movie-page counterpart of the show page's cache-first loading (no seasons involved). */
@@ -415,8 +410,8 @@ const ENDED_SHOW_STATUSES = new Set(['Ended', 'Canceled']);
  * toward completion, so a show with every regular episode watched but no specials
  * logged still completes. Also requires the show itself to have ended: a renewed or
  * still-airing show that's fully caught up stays 'watching' since more episodes are
- * coming. Relies on the `seasons` cache, which is only populated once someone has
- * opened the show page -- if it's empty this is a no-op rather than a false
+ * coming. Relies on the `seasons` cache, which is populated by the show sync (background job,
+ * import, or opening a never-synced show) -- if it's empty this is a no-op rather than a false
  * completion. Leaves plan_to_watch/dropped alone since those are deliberate choices. */
 export async function syncShowCompletion(userId: string, tmdbId: number): Promise<void> {
 	const [tracking] = await db
