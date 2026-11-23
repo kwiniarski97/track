@@ -6,6 +6,7 @@ import { paraglideMiddleware } from '$lib/paraglide/server';
 import { SESSION_COOKIE_NAME, validateSessionToken } from '$lib/server/auth';
 import { refreshCalendarCache } from '$lib/server/jobs/refreshCalendar';
 import { refreshTrackedMetadata } from '$lib/server/jobs/refreshMetadata';
+import { syncDueShows } from '$lib/server/jobs/syncShows';
 import { syncAllLinkedJellyfinAccounts } from '$lib/server/jobs/syncJellyfin';
 import { PARAGLIDE_LOCALE_COOKIE } from '$lib/server/locale';
 
@@ -26,6 +27,15 @@ new Cron('0 * * * *', () => {
 		console.error('[syncJellyfin] scheduled run failed', error);
 	});
 });
+
+function runShowSync() {
+	syncDueShows().catch((error) => {
+		console.error('[syncShows] scheduled run failed', error);
+	});
+}
+
+new Cron('15 * * * *', runShowSync);
+setTimeout(runShowSync, 30_000);
 
 const handleAuth: Handle = async ({ event, resolve }) => {
 	const token = event.cookies.get(SESSION_COOKIE_NAME);
