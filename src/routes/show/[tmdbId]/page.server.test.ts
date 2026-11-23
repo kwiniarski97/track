@@ -45,6 +45,53 @@ describe('show page actions', () => {
 		return tracking?.status;
 	}
 
+	const TRACK_DETAILS: TmdbShowDetails = {
+		id: TMDB_ID,
+		name: 'Test Show',
+		original_language: 'en',
+		overview: 'overview',
+		poster_path: null,
+		backdrop_path: null,
+		first_air_date: '2020-01-01',
+		status: 'Returning Series',
+		next_episode_to_air: null,
+		seasons: [],
+		vote_average: 7,
+		vote_count: 10
+	};
+
+	it('track starts a background sync of the show', async () => {
+		vi.mocked(getShowWithSeasons).mockReset();
+		vi.mocked(getShowWithSeasons).mockResolvedValue({ details: TRACK_DETAILS, seasons: new Map() });
+		await db.update(shows).set({ syncedAt: null }).where(eq(shows.tmdbId, TMDB_ID));
+		await db.delete(userTracking).where(eq(userTracking.userId, userId));
+		await actions.track({
+			locals: { user: { id: userId } },
+			params: { tmdbId: String(TMDB_ID) }
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		} as any);
+		expect(await statusOf()).toBe('watching');
+		await vi.waitFor(async () => {
+			const [row] = await db.select().from(shows).where(eq(shows.tmdbId, TMDB_ID));
+			expect(row.syncedAt).not.toBeNull();
+		});
+	});
+
+	it('track succeeds even when the background sync fails', async () => {
+		vi.mocked(getShowWithSeasons).mockReset();
+		vi.mocked(getShowWithSeasons).mockRejectedValue(new Error('TMDB down'));
+		await db.delete(userTracking).where(eq(userTracking.userId, userId));
+		await actions.track({
+			locals: { user: { id: userId } },
+			params: { tmdbId: String(TMDB_ID) }
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		} as any);
+		expect(await statusOf()).toBe('watching');
+		await vi.waitFor(() => expect(getShowWithSeasons).toHaveBeenCalled());
+		// let the swallowed failure settle; an unhandled rejection would fail the run
+		await new Promise((r) => setTimeout(r, 50));
+	});
+
 	it('drop sets the status to dropped without deleting the tracking row', async () => {
 		await actions.drop({
 			locals: { user: { id: userId } },

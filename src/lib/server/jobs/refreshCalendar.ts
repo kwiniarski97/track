@@ -84,9 +84,9 @@ async function refreshCalendarCacheForUser(userId: string): Promise<void> {
 
 /** Rebuilds the `calendar_entries` cache -- everyone's if `userId` is omitted (the
  * scheduled job), or just one user's. Pure local computation off the already-cached
- * shows/movies tables, no TMDB calls; pair with refreshTrackedMetadata (which is what
- * actually keeps those tables fresh) to get an up-to-date calendar. Failures for one
- * user don't stop the rest. */
+ * shows/movies tables, no TMDB calls; pair with syncShows (shows) and
+ * refreshTrackedMetadata (movies), which are what actually keep those tables fresh,
+ * to get an up-to-date calendar. Failures for one user don't stop the rest. */
 export async function refreshCalendarCache(userId?: string): Promise<void> {
 	const userIds = userId
 		? [userId]
