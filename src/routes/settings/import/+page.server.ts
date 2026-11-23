@@ -10,6 +10,7 @@ import {
 } from '$lib/server/import/sessions';
 import { parseTvTimeExport } from '$lib/server/import/tvtime';
 import { cacheShowSeasons, refreshShow, syncShowCompletion } from '$lib/server/media';
+import { syncShows } from '$lib/server/jobs/syncShows';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url, locals }) => {
@@ -76,6 +77,7 @@ export const actions: Actions = {
 
 		let importedShows = 0;
 		let importedEpisodes = 0;
+		const importedIds: number[] = [];
 
 		for (const [index, show] of session.shows.entries()) {
 			const pick = formData.get(`pick_${index}`);
@@ -119,10 +121,14 @@ export const actions: Actions = {
 
 			await syncShowCompletion(locals.user!.id, tmdbId);
 			importedShows += 1;
+			importedIds.push(tmdbId);
 			importedEpisodes += show.episodes.length;
 		}
 
 		deleteImportSession(importId);
+		void syncShows(importedIds).catch((e) =>
+			console.error('[tvtime-import] background sync failed', e)
+		);
 		return { success: true as const, importedShows, importedEpisodes };
 	}
 };

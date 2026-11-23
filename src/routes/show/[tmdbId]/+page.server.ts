@@ -8,6 +8,7 @@ import {
 	userWatches
 } from '$lib/server/db/schema';
 import { getShowForPage, syncShowCompletion } from '$lib/server/media';
+import { syncShows } from '$lib/server/jobs/syncShows';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url, locals }) => {
@@ -102,6 +103,10 @@ export const actions: Actions = {
 			.insert(userTracking)
 			.values({ userId: locals.user!.id, mediaType: 'tv', tmdbId, status: 'watching' })
 			.onConflictDoNothing();
+		// Fire and forget: the button responds immediately, the show fills in behind it.
+		void syncShows([tmdbId]).catch((e) =>
+			console.error(`[track] background sync failed for show ${tmdbId}`, e)
+		);
 	},
 	untrack: async ({ locals, params }) => {
 		const tmdbId = Number(params.tmdbId);
