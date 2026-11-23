@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from './db';
 import {
 	episodes,
@@ -11,13 +11,12 @@ import {
 	users,
 	type TrackingStatus
 } from './db/schema';
-import { getShowDetails, getMovieDetails, getShowWithSeasons } from './tmdb';
+import { getMovieDetails, getShowWithSeasons } from './tmdb';
 import type { TmdbMovieDetails, TmdbSeasonDetails, TmdbShowDetails } from './tmdb';
 import { extractPosterColor } from './poster-color';
 import {
 	MEDIA_CACHE_TTL_MS,
 	getMovieCachedOrRefresh,
-	getShowCachedOrRefresh,
 	getShowProgress,
 	syncShow,
 	syncShowCompletion
@@ -28,7 +27,6 @@ import {
 // never reaches these mocks.
 vi.mock('./tmdb', async (importOriginal) => ({
 	...(await importOriginal<typeof import('./tmdb')>()),
-	getShowDetails: vi.fn(),
 	getMovieDetails: vi.fn(),
 	getShowWithSeasons: vi.fn()
 }));
@@ -302,154 +300,6 @@ describe('getShowProgress', () => {
 function staleDate(): Date {
 	return new Date(Date.now() - MEDIA_CACHE_TTL_MS - 60 * 1000);
 }
-
-describe('getShowCachedOrRefresh', () => {
-	const SHOW_ID = 999021;
-
-	const SHOW_DETAILS: TmdbShowDetails = {
-		id: SHOW_ID,
-		name: 'Fresh Show',
-		original_language: 'en',
-		overview: 'Fresh overview',
-		poster_path: '/fresh-poster.jpg',
-		backdrop_path: '/fresh-backdrop.jpg',
-		first_air_date: '2020-01-01',
-		status: 'Returning Series',
-		next_episode_to_air: null,
-		seasons: [{ season_number: 1, name: 'Season 1', episode_count: 8, air_date: '2020-01-01' }],
-		vote_average: 8.2,
-		vote_count: 240
-	};
-
-	/** Fully-populated cached row, as the current upsertShow would write it. */
-	async function seedCachedShow(updatedAt: Date) {
-		await db.insert(shows).values({
-			tmdbId: SHOW_ID,
-			title: 'Cached Show',
-			posterPath: '/cached-poster.jpg',
-			backdropPath: '/cached-backdrop.jpg',
-			voteAverage: 7.5,
-			voteCount: 100,
-			overview: 'Cached overview',
-			status: 'Ended',
-			updatedAt
-		});
-	}
-
-	async function seedCachedSeasons() {
-		await db.insert(seasons).values([
-			{ showTmdbId: SHOW_ID, seasonNumber: 0, name: 'Specials', episodeCount: 1 },
-			{ showTmdbId: SHOW_ID, seasonNumber: 1, name: 'Season 1', episodeCount: 5 }
-		]);
-	}
-
-	beforeEach(() => {
-		vi.mocked(getShowDetails).mockReset();
-		vi.mocked(getShowDetails).mockResolvedValue(SHOW_DETAILS);
-	});
-
-	afterEach(async () => {
-		await db.delete(seasons).where(eq(seasons.showTmdbId, SHOW_ID));
-		await db.delete(shows).where(eq(shows.tmdbId, SHOW_ID));
-	});
-
-	it('serves a TTL-fresh show from the db without any TMDB call', async () => {
-		await seedCachedShow(new Date());
-		await seedCachedSeasons();
-
-		const result = await getShowCachedOrRefresh(SHOW_ID);
-
-		expect(getShowDetails).not.toHaveBeenCalled();
-		expect(result).toEqual({
-			id: SHOW_ID,
-			name: 'Cached Show',
-			overview: 'Cached overview',
-			poster_path: '/cached-poster.jpg',
-			backdrop_path: '/cached-backdrop.jpg',
-			first_air_date: null,
-			next_episode_to_air: null,
-			status: 'Ended',
-			vote_average: 7.5,
-			vote_count: 100,
-			seasons: [
-				{ season_number: 0, name: 'Specials', episode_count: 1, air_date: null },
-				{ season_number: 1, name: 'Season 1', episode_count: 5, air_date: null }
-			]
-		});
-	});
-
-	it('reconstructs next_episode_to_air from the cached columns', async () => {
-		await seedCachedShow(new Date());
-		await seedCachedSeasons();
-		await db
-			.update(shows)
-			.set({
-				firstAirDate: '2008-01-20',
-				nextEpisodeAirDate: '2030-03-04',
-				nextEpisodeSeasonNumber: 2,
-				nextEpisodeNumber: 7,
-				nextEpisodeName: 'The Return'
-			})
-			.where(eq(shows.tmdbId, SHOW_ID));
-
-		const result = await getShowCachedOrRefresh(SHOW_ID);
-
-		expect(getShowDetails).not.toHaveBeenCalled();
-		expect(result.first_air_date).toBe('2008-01-20');
-		expect(result.next_episode_to_air).toEqual({
-			air_date: '2030-03-04',
-			episode_number: 7,
-			season_number: 2,
-			name: 'The Return'
-		});
-	});
-
-	it('refetches from TMDB once the cached row is older than the TTL', async () => {
-		await seedCachedShow(staleDate());
-		await seedCachedSeasons();
-
-		const result = await getShowCachedOrRefresh(SHOW_ID);
-
-		expect(getShowDetails).toHaveBeenCalledTimes(1);
-		expect(result.name).toBe('Fresh Show');
-
-		// The refresh must also persist the new fields and re-cache the seasons.
-		const [row] = await db.select().from(shows).where(eq(shows.tmdbId, SHOW_ID));
-		expect(row.voteCount).toBe(240);
-		expect(row.backdropPath).toBe('/fresh-backdrop.jpg');
-		const [season1] = await db
-			.select()
-			.from(seasons)
-			.where(and(eq(seasons.showTmdbId, SHOW_ID), eq(seasons.seasonNumber, 1)));
-		expect(season1.episodeCount).toBe(8);
-	});
-
-	it('refetches a never-cached show', async () => {
-		const result = await getShowCachedOrRefresh(SHOW_ID);
-
-		expect(getShowDetails).toHaveBeenCalledTimes(1);
-		expect(result.name).toBe('Fresh Show');
-	});
-
-	it('refetches a fresh row whose seasons were never cached', async () => {
-		// e.g. a row written by the calendar job or an import, which never call
-		// cacheShowSeasons -- the show page can't render without a season list.
-		await seedCachedShow(new Date());
-
-		await getShowCachedOrRefresh(SHOW_ID);
-
-		expect(getShowDetails).toHaveBeenCalledTimes(1);
-	});
-
-	it('refetches a fresh row written before the vote/backdrop columns existed', async () => {
-		await db.insert(shows).values({ tmdbId: SHOW_ID, title: 'Legacy Show', status: 'Ended' });
-		await seedCachedSeasons();
-
-		await getShowCachedOrRefresh(SHOW_ID);
-
-		expect(getShowDetails).toHaveBeenCalledTimes(1);
-	});
-});
 
 describe('getMovieCachedOrRefresh', () => {
 	const MOVIE_ID = 999022;

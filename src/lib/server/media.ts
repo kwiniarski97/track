@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lte, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lte, ne, notInArray, sql } from 'drizzle-orm';
 import { db } from './db';
 import {
 	episodes,
@@ -282,64 +282,106 @@ export type MovieSummary = {
 	vote_count: number;
 };
 
-/** Serves the show page from the local cache when the row is fresh, only falling back
- * to a live TMDB fetch (+ season re-cache) when it's missing or stale -- previously
- * every page view paid for a TMDB round trip. Rows written before the vote/status
- * columns existed (voteCount/status null) count as stale so they self-heal on the next
- * visit instead of rendering without a score badge for a whole TTL. */
-export async function getShowCachedOrRefresh(tmdbId: number): Promise<ShowSummary> {
-	const [cached] = await db.select().from(shows).where(eq(shows.tmdbId, tmdbId));
-	if (
-		cached &&
-		cached.voteCount !== null &&
-		cached.voteAverage !== null &&
-		cached.status !== null &&
-		Date.now() - cached.updatedAt.getTime() < MEDIA_CACHE_TTL_MS
-	) {
-		const seasonRows = await db.select().from(seasons).where(eq(seasons.showTmdbId, tmdbId));
-		// No cached seasons means the row was written by a path that never calls
-		// cacheShowSeasons (calendar job, import) -- the page can't render without a
-		// season list, so treat it as a miss rather than serving an empty show.
-		if (seasonRows.length > 0) {
-			return {
-				id: cached.tmdbId,
-				name: cached.title,
-				// The db column is nullable but TMDB always sends a string (possibly
-				// empty), so an empty string is the faithful round trip.
-				overview: cached.overview ?? '',
-				poster_path: cached.posterPath,
-				backdrop_path: cached.backdropPath,
-				first_air_date: cached.firstAirDate,
-				status: cached.status,
-				// The season/episode numbers are written together with the air date, so a
-				// non-null air date is enough to treat the whole group as present.
-				next_episode_to_air:
-					cached.nextEpisodeAirDate !== null
-						? {
-								air_date: cached.nextEpisodeAirDate,
-								episode_number: cached.nextEpisodeNumber ?? 0,
-								season_number: cached.nextEpisodeSeasonNumber ?? 0,
-								name: cached.nextEpisodeName ?? ''
-							}
-						: null,
-				vote_average: cached.voteAverage,
-				vote_count: cached.voteCount,
-				seasons: seasonRows.map((s) => ({
-					season_number: s.seasonNumber,
-					name: s.name,
-					episode_count: s.episodeCount,
-					air_date: s.airDate
-				}))
-			};
-		}
-	}
+/** How long an unfollowed show's cache is trusted before opening its page re-syncs it
+ * (followed shows are kept fresh by the background job instead). */
+export const UNFOLLOWED_RESYNC_MS = 24 * 60 * 60 * 1000;
 
-	const details = await refreshShow(tmdbId);
-	await cacheShowSeasons(tmdbId, details);
-	return details;
+/** "Followed" = at least one user tracks it as something other than dropped -- the same
+ * predicate the background sync job uses to pick shows. */
+export async function isShowFollowed(tmdbId: number): Promise<boolean> {
+	const [row] = await db
+		.select({ id: userTracking.id })
+		.from(userTracking)
+		.where(
+			and(
+				eq(userTracking.mediaType, 'tv'),
+				eq(userTracking.tmdbId, tmdbId),
+				ne(userTracking.status, 'dropped')
+			)
+		)
+		.limit(1);
+	return !!row;
 }
 
-/** Movie-page counterpart of getShowCachedOrRefresh (no seasons involved). */
+/** Rebuilds the page payload from the db alone. Null when there is no row or no season
+ * rows (e.g. written by the calendar job or import), since the page can't render without
+ * a season list. */
+async function readShowSummary(tmdbId: number): Promise<ShowSummary | null> {
+	const [cached] = await db.select().from(shows).where(eq(shows.tmdbId, tmdbId));
+	if (!cached) return null;
+	const seasonRows = await db.select().from(seasons).where(eq(seasons.showTmdbId, tmdbId));
+	if (seasonRows.length === 0) return null;
+	return {
+		id: cached.tmdbId,
+		name: cached.title,
+		// The db column is nullable but TMDB always sends a string (possibly
+		// empty), so an empty string is the faithful round trip.
+		overview: cached.overview ?? '',
+		poster_path: cached.posterPath,
+		backdrop_path: cached.backdropPath,
+		first_air_date: cached.firstAirDate,
+		status: cached.status ?? '',
+		// The season/episode numbers are written together with the air date, so a
+		// non-null air date is enough to treat the whole group as present.
+		next_episode_to_air:
+			cached.nextEpisodeAirDate !== null
+				? {
+						air_date: cached.nextEpisodeAirDate,
+						episode_number: cached.nextEpisodeNumber ?? 0,
+						season_number: cached.nextEpisodeSeasonNumber ?? 0,
+						name: cached.nextEpisodeName ?? ''
+					}
+				: null,
+		vote_average: cached.voteAverage ?? 0,
+		vote_count: cached.voteCount ?? 0,
+		seasons: seasonRows.map((s) => ({
+			season_number: s.seasonNumber,
+			name: s.name,
+			episode_count: s.episodeCount,
+			air_date: s.airDate
+		}))
+	};
+}
+
+/** Serves the show page from the db. The background job keeps followed shows fresh, so
+ * TMDB is only hit for a never-synced show, or an unfollowed one whose sync is over 24h
+ * old. A failed sync degrades to whatever is cached; only a show with nothing cached
+ * errors. */
+export async function getShowForPage(tmdbId: number): Promise<ShowSummary> {
+	const [row] = await db
+		.select({ syncedAt: shows.syncedAt })
+		.from(shows)
+		.where(eq(shows.tmdbId, tmdbId));
+
+	if (row?.syncedAt) {
+		const stale = Date.now() - row.syncedAt.getTime() >= UNFOLLOWED_RESYNC_MS;
+		if (stale && !(await isShowFollowed(tmdbId))) {
+			try {
+				await syncShow(tmdbId);
+			} catch (err) {
+				console.error(`Re-sync of unfollowed show ${tmdbId} failed, serving cache`, err);
+			}
+		}
+		const summary = await readShowSummary(tmdbId);
+		if (summary) return summary;
+	}
+
+	try {
+		await syncShow(tmdbId);
+	} catch (err) {
+		const cached = await readShowSummary(tmdbId);
+		if (cached) {
+			console.error(`First sync of show ${tmdbId} failed, serving cache`, err);
+			return cached;
+		}
+		throw err;
+	}
+	const summary = await readShowSummary(tmdbId);
+	if (!summary) throw new Error(`Show ${tmdbId} has no seasons after sync`);
+	return summary;
+}
+
+/** Movie-page counterpart of the show page's cache-first loading (no seasons involved). */
 export async function getMovieCachedOrRefresh(tmdbId: number): Promise<MovieSummary> {
 	const [cached] = await db.select().from(movies).where(eq(movies.tmdbId, tmdbId));
 	if (

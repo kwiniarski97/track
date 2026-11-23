@@ -1,23 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { episodes, seasons, shows, userTracking, users } from '$lib/server/db/schema';
-import { getSeasonDetails, getShowDetails } from '$lib/server/tmdb';
+import { getShowWithSeasons } from '$lib/server/tmdb';
 import type { TmdbSeasonDetails, TmdbShowDetails } from '$lib/server/tmdb';
-import { MEDIA_CACHE_TTL_MS } from '$lib/server/media';
 import { actions, load } from './+page.server';
-
-/** A timestamp just past the TTL, so the row counts as stale. */
-function staleDate(): Date {
-	return new Date(Date.now() - MEDIA_CACHE_TTL_MS - 60 * 1000);
-}
 
 // The load tests need to prove whether TMDB was hit, so the network layer is mocked
 // out; the action tests below never reach these mocks.
 vi.mock('$lib/server/tmdb', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/server/tmdb')>()),
-	getShowDetails: vi.fn(),
-	getSeasonDetails: vi.fn()
+	getShowWithSeasons: vi.fn()
 }));
 // extractPosterColor downloads the poster image on the refresh path -- stub it out.
 vi.mock('$lib/server/poster-color', () => ({
@@ -126,7 +119,7 @@ describe('show page load', () => {
 
 	/** Fully-populated show + season + episode cache, as a previous page view under the
 	 * current code would have written it. */
-	async function seedFreshCache(updatedAt: Date) {
+	async function seedFreshCache(updatedAt: Date, syncedAt: Date | null = updatedAt) {
 		await db.insert(shows).values({
 			tmdbId: LOAD_ID,
 			title: 'Cached Show',
@@ -137,7 +130,8 @@ describe('show page load', () => {
 			voteCount: 100,
 			overview: 'Cached overview',
 			status: 'Ended',
-			updatedAt
+			updatedAt,
+			syncedAt
 		});
 		await db.insert(seasons).values([
 			{ showTmdbId: LOAD_ID, seasonNumber: 0, name: 'Specials', episodeCount: 1 },
@@ -179,12 +173,11 @@ describe('show page load', () => {
 	}
 
 	beforeEach(async () => {
-		vi.mocked(getShowDetails).mockReset();
-		vi.mocked(getShowDetails).mockResolvedValue(SHOW_DETAILS);
-		vi.mocked(getSeasonDetails).mockReset();
-		vi.mocked(getSeasonDetails).mockImplementation(
-			async (_tmdbId, seasonNumber) => SEASON_FIXTURES[seasonNumber]
-		);
+		vi.mocked(getShowWithSeasons).mockReset();
+		vi.mocked(getShowWithSeasons).mockResolvedValue({
+			details: SHOW_DETAILS,
+			seasons: new Map(Object.entries(SEASON_FIXTURES).map(([n, d]) => [Number(n), d]))
+		});
 
 		const [user] = await db
 			.insert(users)
@@ -194,19 +187,26 @@ describe('show page load', () => {
 	});
 
 	afterEach(async () => {
+		await db.delete(userTracking).where(eq(userTracking.userId, userId));
 		await db.delete(episodes).where(eq(episodes.showTmdbId, LOAD_ID));
 		await db.delete(seasons).where(eq(seasons.showTmdbId, LOAD_ID));
 		await db.delete(shows).where(eq(shows.tmdbId, LOAD_ID));
 		await db.delete(users).where(eq(users.id, userId));
 	});
 
-	it('serves a TTL-fresh show entirely from the db, without any TMDB call', async () => {
+	const HOUR = 60 * 60 * 1000;
+	const ago = (ms: number) => new Date(Date.now() - ms);
+
+	async function track(status: 'watching' | 'dropped' | 'plan_to_watch' | 'completed') {
+		await db.insert(userTracking).values({ userId, mediaType: 'tv', tmdbId: LOAD_ID, status });
+	}
+
+	it('serves a freshly synced show entirely from the db, without any TMDB call', async () => {
 		await seedFreshCache(new Date());
 
 		const data = await runLoad();
 
-		expect(getShowDetails).not.toHaveBeenCalled();
-		expect(getSeasonDetails).not.toHaveBeenCalled();
+		expect(getShowWithSeasons).not.toHaveBeenCalled();
 
 		expect(data.show.name).toBe('Cached Show');
 		expect(data.show.backdrop_path).toBe('/cached-backdrop.jpg');
@@ -224,19 +224,8 @@ describe('show page load', () => {
 
 		const data = await runLoad('?season=1');
 
-		expect(getShowDetails).not.toHaveBeenCalled();
+		expect(getShowWithSeasons).not.toHaveBeenCalled();
 		expect(data.selectedSeason).toBe(1);
-	});
-
-	it('refetches show details once the cached row is older than the TTL', async () => {
-		await seedFreshCache(staleDate());
-
-		const data = await runLoad();
-
-		expect(getShowDetails).toHaveBeenCalledTimes(1);
-		// Episode cache is still complete, so no per-season fetches are needed.
-		expect(getSeasonDetails).not.toHaveBeenCalled();
-		expect(data.show.name).toBe('Fresh Show');
 	});
 
 	it('serves cached episode overviews without hitting TMDB', async () => {
@@ -244,75 +233,63 @@ describe('show page load', () => {
 
 		const data = await runLoad();
 
-		expect(getSeasonDetails).not.toHaveBeenCalled();
+		expect(getShowWithSeasons).not.toHaveBeenCalled();
 		expect(data.episodesBySeason[1][0].overview).toBe('S1E1 cached overview');
 	});
 
-	it('refetches seasons cached before episode overviews existed', async () => {
-		await seedFreshCache(new Date());
-		await db
-			.update(episodes)
-			.set({ overview: null })
-			.where(and(eq(episodes.showTmdbId, LOAD_ID), eq(episodes.seasonNumber, 1)));
+	it('serves a followed show synced 3 days ago from the db without any TMDB call', async () => {
+		await seedFreshCache(ago(72 * HOUR));
+		await track('watching');
 
 		const data = await runLoad();
 
-		expect(getSeasonDetails).toHaveBeenCalledTimes(1);
-		expect(getSeasonDetails).toHaveBeenCalledWith(LOAD_ID, 1);
-		expect(data.episodesBySeason[1].map((e: { overview: string | null }) => e.overview)).toEqual([
-			'S1E1 fresh overview',
-			'S1E2 fresh overview'
-		]);
-		expect(data.episodesBySeason[2][0].overview).toBe('S2E1 cached overview');
+		expect(getShowWithSeasons).not.toHaveBeenCalled();
+		expect(data.show.name).toBe('Cached Show');
 	});
 
-	it('refetches only the seasons whose cached titles are placeholders or empty', async () => {
-		await seedFreshCache(new Date());
-		// Cached before the original-name fallback existed: a missing Polish translation
-		// left the TMDB placeholder (or an empty string) in the episode cache.
-		await db
-			.update(episodes)
-			.set({ title: 'Odcinek 2' })
-			.where(
-				and(
-					eq(episodes.showTmdbId, LOAD_ID),
-					eq(episodes.seasonNumber, 1),
-					eq(episodes.episodeNumber, 2)
-				)
-			);
-		await db
-			.update(episodes)
-			.set({ title: '' })
-			.where(
-				and(
-					eq(episodes.showTmdbId, LOAD_ID),
-					eq(episodes.seasonNumber, 2),
-					eq(episodes.episodeNumber, 1)
-				)
-			);
+	it('serves an unfollowed show synced 2h ago from the db', async () => {
+		await seedFreshCache(ago(2 * HOUR));
 
 		const data = await runLoad();
 
-		expect(getSeasonDetails).toHaveBeenCalledTimes(2);
-		expect(getSeasonDetails).toHaveBeenCalledWith(LOAD_ID, 1);
-		expect(getSeasonDetails).toHaveBeenCalledWith(LOAD_ID, 2);
-		expect(data.episodesBySeason[1].map((e: { title: string }) => e.title)).toEqual([
-			'S1E1',
-			'S1E2'
-		]);
-		expect(data.episodesBySeason[2].map((e: { title: string }) => e.title)).toEqual([
-			'S2E1',
-			'S2E2'
-		]);
+		expect(getShowWithSeasons).not.toHaveBeenCalled();
+		expect(data.show.name).toBe('Cached Show');
 	});
 
-	it('fetches show details and every season for a never-cached show', async () => {
+	it('re-syncs an unfollowed show whose sync is older than 24h', async () => {
+		await seedFreshCache(ago(25 * HOUR));
+
 		const data = await runLoad();
 
-		expect(getShowDetails).toHaveBeenCalledTimes(1);
-		expect(getSeasonDetails).toHaveBeenCalledTimes(2);
+		expect(getShowWithSeasons).toHaveBeenCalledTimes(1);
+		expect(data.show.name).toBe('Fresh Show');
+	});
 
-		// The batched multi-row insert must have cached every episode of both seasons.
+	it('treats a show tracked only as dropped as unfollowed', async () => {
+		await seedFreshCache(ago(25 * HOUR));
+		await track('dropped');
+
+		const data = await runLoad();
+
+		expect(getShowWithSeasons).toHaveBeenCalledTimes(1);
+		expect(data.show.name).toBe('Fresh Show');
+	});
+
+	it('falls back to cached data when re-syncing a stale unfollowed show fails', async () => {
+		await seedFreshCache(ago(25 * HOUR));
+		vi.mocked(getShowWithSeasons).mockRejectedValue(new Error('TMDB down'));
+
+		const data = await runLoad();
+
+		expect(getShowWithSeasons).toHaveBeenCalledTimes(1);
+		expect(data.show.name).toBe('Cached Show');
+	});
+
+	it('syncs a never-synced show exactly once and renders the fresh data', async () => {
+		const data = await runLoad();
+
+		expect(getShowWithSeasons).toHaveBeenCalledTimes(1);
+		expect(data.show.name).toBe('Fresh Show');
 		expect(data.episodesBySeason[1].map((e: { title: string }) => e.title)).toEqual([
 			'S1E1',
 			'S1E2'
@@ -323,5 +300,46 @@ describe('show page load', () => {
 		]);
 		const cached = await db.select().from(episodes).where(eq(episodes.showTmdbId, LOAD_ID));
 		expect(cached).toHaveLength(4);
+	});
+
+	it('serves the cached row when the first sync of an imported show fails', async () => {
+		await seedFreshCache(new Date(), null);
+		vi.mocked(getShowWithSeasons).mockRejectedValue(new Error('TMDB down'));
+
+		const data = await runLoad();
+
+		expect(getShowWithSeasons).toHaveBeenCalledTimes(1);
+		expect(data.show.name).toBe('Cached Show');
+	});
+
+	it('errors when a never-cached show cannot be synced', async () => {
+		vi.mocked(getShowWithSeasons).mockRejectedValue(new Error('TMDB down'));
+
+		await expect(runLoad()).rejects.toThrow('TMDB down');
+	});
+
+	it('reconstructs next_episode_to_air from the cached columns', async () => {
+		await seedFreshCache(new Date());
+		await db
+			.update(shows)
+			.set({
+				firstAirDate: '2008-01-20',
+				nextEpisodeAirDate: '2030-03-04',
+				nextEpisodeSeasonNumber: 2,
+				nextEpisodeNumber: 7,
+				nextEpisodeName: 'The Return'
+			})
+			.where(eq(shows.tmdbId, LOAD_ID));
+
+		const data = await runLoad();
+
+		expect(getShowWithSeasons).not.toHaveBeenCalled();
+		expect(data.show.first_air_date).toBe('2008-01-20');
+		expect(data.show.next_episode_to_air).toEqual({
+			air_date: '2030-03-04',
+			episode_number: 7,
+			season_number: 2,
+			name: 'The Return'
+		});
 	});
 });

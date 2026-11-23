@@ -168,11 +168,6 @@ function isEpisodeNamePlaceholder(name: string, episodeNumber: number): boolean 
 	return name === '' || name === `Odcinek ${episodeNumber}`;
 }
 
-async function getOriginalLanguage(tmdbId: number): Promise<string> {
-	const data = await tmdbFetch<{ original_language: string }>(`/tv/${tmdbId}`);
-	return data.original_language;
-}
-
 export type TmdbShowDetails = {
 	id: number;
 	name: string;
@@ -333,23 +328,6 @@ export async function getShowWithSeasons(
 	}
 
 	return { details, seasons };
-}
-
-export async function getSeasonDetails(
-	tmdbId: number,
-	seasonNumber: number
-): Promise<TmdbSeasonDetails> {
-	const data = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`);
-	const needsOriginal = (ep: TmdbSeasonDetails['episodes'][number]) =>
-		isEpisodeNamePlaceholder(ep.name, ep.episode_number) || ep.overview === '';
-	if (!data.episodes.some(needsOriginal)) {
-		return data;
-	}
-
-	const original = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`, {
-		language: await getOriginalLanguage(tmdbId)
-	});
-	return mergeOriginalEpisodes(data, original);
 }
 
 export type TmdbMovieDetails = {
