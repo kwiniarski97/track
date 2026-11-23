@@ -4,6 +4,7 @@ export { tmdbPosterUrl } from '$lib/tmdb-client';
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const DEFAULT_LANGUAGE = 'pl-PL';
+export const TMDB_TIMEOUT_MS = 5000;
 
 async function tmdbFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
 	if (!env.TMDB_API_KEY) throw new Error('TMDB_API_KEY is not set');
@@ -13,7 +14,7 @@ async function tmdbFetch<T>(path: string, params: Record<string, string> = {}): 
 	url.searchParams.set('language', DEFAULT_LANGUAGE);
 	for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
-	const response = await fetch(url);
+	const response = await fetch(url, { signal: AbortSignal.timeout(TMDB_TIMEOUT_MS) });
 	if (!response.ok) {
 		throw new Error(`TMDB request failed: ${response.status} ${response.statusText} (${path})`);
 	}
@@ -223,20 +224,10 @@ export type TmdbSeasonDetails = {
 	}>;
 };
 
-export async function getSeasonDetails(
-	tmdbId: number,
-	seasonNumber: number
-): Promise<TmdbSeasonDetails> {
-	const data = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`);
-	const needsOriginal = (ep: TmdbSeasonDetails['episodes'][number]) =>
-		isEpisodeNamePlaceholder(ep.name, ep.episode_number) || ep.overview === '';
-	if (!data.episodes.some(needsOriginal)) {
-		return data;
-	}
-
-	const original = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`, {
-		language: await getOriginalLanguage(tmdbId)
-	});
+function mergeOriginalEpisodes(
+	data: TmdbSeasonDetails,
+	original: TmdbSeasonDetails
+): TmdbSeasonDetails {
 	const originalByNumber = new Map(original.episodes.map((ep) => [ep.episode_number, ep]));
 
 	return {
@@ -253,6 +244,112 @@ export async function getSeasonDetails(
 			};
 		})
 	};
+}
+
+function seasonNeedsOriginal(season: TmdbSeasonDetails): boolean {
+	return season.episodes.some(
+		(ep) => isEpisodeNamePlaceholder(ep.name, ep.episode_number) || ep.overview === ''
+	);
+}
+
+// TMDB's append_to_response accepts at most 20 sub-requests per call.
+export const APPEND_SEASON_LIMIT = 20;
+
+export type TmdbShowWithSeasons = {
+	details: TmdbShowDetails;
+	seasons: Map<number, TmdbSeasonDetails>;
+};
+
+type TmdbShowResponse = TmdbShowDetails & Record<`season/${number}`, TmdbSeasonDetails | undefined>;
+
+function chunk<T>(items: T[], size: number): T[][] {
+	const groups: T[][] = [];
+	for (let i = 0; i < items.length; i += size) groups.push(items.slice(i, i + size));
+	return groups;
+}
+
+function fetchShowResponse(
+	tmdbId: number,
+	seasonNumbers: number[],
+	language?: string
+): Promise<TmdbShowResponse> {
+	const params: Record<string, string> = {};
+	if (seasonNumbers.length > 0) {
+		params.append_to_response = seasonNumbers.map((n) => `season/${n}`).join(',');
+	}
+	if (language) params.language = language;
+	return tmdbFetch<TmdbShowResponse>(`/tv/${tmdbId}`, params);
+}
+
+function collectSeasons(
+	response: TmdbShowResponse,
+	seasonNumbers: number[],
+	into: Map<number, TmdbSeasonDetails>
+): void {
+	for (const n of seasonNumbers) {
+		const season = response[`season/${n}`];
+		if (season) into.set(n, season);
+	}
+}
+
+/**
+ * Fetches show details and every season in as few TMDB calls as possible: seasons ride along
+ * on /tv/{id} via append_to_response (20 per call). `knownSeasonNumbers` lets the first call
+ * already carry seasons; any season in `details.seasons` it did not cover gets follow-up calls.
+ * `seasons` holds only the payloads TMDB actually returned.
+ */
+export async function getShowWithSeasons(
+	tmdbId: number,
+	knownSeasonNumbers: number[] = []
+): Promise<TmdbShowWithSeasons> {
+	const firstGroup = knownSeasonNumbers.slice(0, APPEND_SEASON_LIMIT);
+	const first = await fetchShowResponse(tmdbId, firstGroup);
+	const details: TmdbShowDetails = first;
+	const seasons = new Map<number, TmdbSeasonDetails>();
+	collectSeasons(first, firstGroup, seasons);
+
+	const requested = new Set(firstGroup);
+	const remaining = details.seasons.map((s) => s.season_number).filter((n) => !requested.has(n));
+	for (const group of chunk(remaining, APPEND_SEASON_LIMIT)) {
+		collectSeasons(await fetchShowResponse(tmdbId, group), group, seasons);
+	}
+
+	const originals: TmdbShowResponse[] = [];
+	const needingOriginal = [...seasons].filter(([, s]) => seasonNeedsOriginal(s)).map(([n]) => n);
+	for (const group of chunk(needingOriginal, APPEND_SEASON_LIMIT)) {
+		const original = await fetchShowResponse(tmdbId, group, details.original_language);
+		originals.push(original);
+		for (const n of group) {
+			const originalSeason = original[`season/${n}`];
+			if (originalSeason) seasons.set(n, mergeOriginalEpisodes(seasons.get(n)!, originalSeason));
+		}
+	}
+
+	const next = details.next_episode_to_air;
+	if (next && isEpisodeNamePlaceholder(next.name, next.episode_number)) {
+		const source = originals[0] ?? (await fetchShowResponse(tmdbId, [], details.original_language));
+		const originalName = source.next_episode_to_air?.name;
+		if (originalName) next.name = originalName;
+	}
+
+	return { details, seasons };
+}
+
+export async function getSeasonDetails(
+	tmdbId: number,
+	seasonNumber: number
+): Promise<TmdbSeasonDetails> {
+	const data = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`);
+	const needsOriginal = (ep: TmdbSeasonDetails['episodes'][number]) =>
+		isEpisodeNamePlaceholder(ep.name, ep.episode_number) || ep.overview === '';
+	if (!data.episodes.some(needsOriginal)) {
+		return data;
+	}
+
+	const original = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`, {
+		language: await getOriginalLanguage(tmdbId)
+	});
+	return mergeOriginalEpisodes(data, original);
 }
 
 export type TmdbMovieDetails = {
