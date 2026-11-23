@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.0](https://github.com/kwiniarski97/track/compare/v1.5.3...v1.6.0) (2026-11-23)
+
+
+### Features
+
+* add syncShow writing a full show snapshot in one transaction ([cb95ace](https://github.com/kwiniarski97/track/commit/cb95ace9fef6b08dea27b3e7200868fe9a6bd04a))
+* fetch show seasons in grouped TMDB calls with a 5s timeout ([ad378e9](https://github.com/kwiniarski97/track/commit/ad378e9040b5c594724a5e783983da97977d8d7b))
+* serve show pages from the db and sync only never-synced or stale unfollowed shows ([3621bde](https://github.com/kwiniarski97/track/commit/3621bdeb413064defdbe6ea77632b22e975f41a4))
+* sync due followed shows hourly in the background ([592b8a8](https://github.com/kwiniarski97/track/commit/592b8a87f86a8f6ae423bcc4920155ce8884effa))
+* sync shows in the background when tracked or imported ([5eef411](https://github.com/kwiniarski97/track/commit/5eef411d92be09e1e49e658e13415b4eaadd63af))
+
+
+### Bug Fixes
+
+* render synced shows with zero seasons and tighten sync edge cases ([01c72d0](https://github.com/kwiniarski97/track/commit/01c72d05cb0a833d5044814b9eb1f8af67de2718))
+
 ## [1.5.3](https://github.com/kwiniarski97/track/compare/v1.5.2...v1.5.3) (2026-08-19)
 
 
