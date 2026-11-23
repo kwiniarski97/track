@@ -1,5 +1,7 @@
 import { env } from '$env/dynamic/private';
 
+import { chunk } from '$lib/server/concurrency';
+
 export { tmdbPosterUrl } from '$lib/tmdb-client';
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
@@ -257,12 +259,6 @@ export type TmdbShowWithSeasons = {
 
 type TmdbShowResponse = TmdbShowDetails & Record<`season/${number}`, TmdbSeasonDetails | undefined>;
 
-function chunk<T>(items: T[], size: number): T[][] {
-	const groups: T[][] = [];
-	for (let i = 0; i < items.length; i += size) groups.push(items.slice(i, i + size));
-	return groups;
-}
-
 function fetchShowResponse(
 	tmdbId: number,
 	seasonNumbers: number[],
@@ -309,8 +305,12 @@ export async function getShowWithSeasons(
 		collectSeasons(await fetchShowResponse(tmdbId, group), group, seasons);
 	}
 
+	// Nothing to fall back to when the show's original language is the one we already asked for.
+	const hasDistinctOriginal = details.original_language !== DEFAULT_LANGUAGE.split('-')[0];
 	const originals: TmdbShowResponse[] = [];
-	const needingOriginal = [...seasons].filter(([, s]) => seasonNeedsOriginal(s)).map(([n]) => n);
+	const needingOriginal = hasDistinctOriginal
+		? [...seasons].filter(([, s]) => seasonNeedsOriginal(s)).map(([n]) => n)
+		: [];
 	for (const group of chunk(needingOriginal, APPEND_SEASON_LIMIT)) {
 		const original = await fetchShowResponse(tmdbId, group, details.original_language);
 		originals.push(original);
@@ -321,7 +321,7 @@ export async function getShowWithSeasons(
 	}
 
 	const next = details.next_episode_to_air;
-	if (next && isEpisodeNamePlaceholder(next.name, next.episode_number)) {
+	if (hasDistinctOriginal && next && isEpisodeNamePlaceholder(next.name, next.episode_number)) {
 		const source = originals[0] ?? (await fetchShowResponse(tmdbId, [], details.original_language));
 		const originalName = source.next_episode_to_air?.name;
 		if (originalName) next.name = originalName;

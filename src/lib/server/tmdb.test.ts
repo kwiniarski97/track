@@ -150,6 +150,30 @@ describe('getShowWithSeasons episode name/overview fallback', () => {
 		expect(result.episodes[0].overview).toBe('Original overview');
 	});
 
+	it('skips the original-language fallback when the show is originally Polish', async () => {
+		mockTmdb([
+			{
+				path: '/tv/100',
+				language: 'pl-PL',
+				data: {
+					...showWithSeason([episode(1, 'Odcinek 1', '')]),
+					original_language: 'pl',
+					next_episode_to_air: {
+						air_date: '2030-01-01',
+						episode_number: 2,
+						season_number: 1,
+						name: 'Odcinek 2'
+					}
+				}
+			}
+		]);
+
+		const result = await getShowWithSeasons(100, [1]);
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(result.seasons.get(1)!.episodes[0].name).toBe('Odcinek 1');
+	});
+
 	it('keeps the placeholder when the original language has no name either', async () => {
 		mockTmdb([polish([episode(1, 'Odcinek 1')]), original([episode(1, '')])]);
 

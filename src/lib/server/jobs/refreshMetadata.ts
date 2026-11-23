@@ -9,12 +9,9 @@ const TMDB_REFRESH_CONCURRENCY = 4;
 
 const ACTIVE_STATUSES = ['watching', 'plan_to_watch'] as const;
 
-async function getActivelyTrackedTmdbIds(
-	mediaType: 'tv' | 'movie',
-	userId?: string
-): Promise<number[]> {
+async function getActivelyTrackedMovieIds(userId?: string): Promise<number[]> {
 	const conditions = [
-		eq(userTracking.mediaType, mediaType),
+		eq(userTracking.mediaType, 'movie'),
 		inArray(userTracking.status, ACTIVE_STATUSES)
 	];
 	if (userId) conditions.push(eq(userTracking.userId, userId));
@@ -30,7 +27,7 @@ async function getActivelyTrackedTmdbIds(
  * `userId` is omitted (the scheduled job), or just one user's. Shows are synced by
  * syncDueShows instead. Failures for one title don't stop the rest. */
 export async function refreshTrackedMetadata(userId?: string): Promise<void> {
-	const movieIds = await getActivelyTrackedTmdbIds('movie', userId);
+	const movieIds = await getActivelyTrackedMovieIds(userId);
 
 	await forEachConcurrent(movieIds, TMDB_REFRESH_CONCURRENCY, async (tmdbId) => {
 		try {
